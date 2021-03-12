@@ -15,7 +15,7 @@ all_transform/*
 data/*
 checkpoints/*
 tiny_benchmark/*
-
+!./assests/*png
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
