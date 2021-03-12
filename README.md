@@ -37,11 +37,11 @@ conda activate ats
 
 
 ## Quick Start 
-### Step0 Download Key Files 
+### Step1 Download Key Files 
 [tiny_data trained network for search](https://entuedu-my.sharepoint.com/:f:/g/personal/gaow0007_e_ntu_edu_sg/Enri_0nIwfNHjoLkBwARzt4Bt2z9B808UbDOQPYz2SA87w)
 
 
-### Step1 Automatic Transformation Search
+### Step2 Automatic Transformation Search
 ```
 # download a tiny_data trained network for search 
 python -u searchalg/batch_generate.py  --arch=ResNet20-4 --data=cifar100 > batch_generate.sh
@@ -49,7 +49,7 @@ bash batch_generate.sh
 python -u searchalg/search_best.py --arch=ResNet20-4 --data=cifar100
 ```
 
-### Step2 Privacy-Perserving Evaluation
+### Step3 Privacy-Perserving Evaluation
 ```
 bash benchmark/run/benchmark_attack.sh
 ```

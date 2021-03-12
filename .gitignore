@@ -15,7 +15,7 @@ all_transform/*
 data/*
 checkpoints/*
 tiny_benchmark/*
-!./assests/*png
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -147,11 +147,8 @@ dmypy.json
 
 *.csv#
 
-*.png
-# dont ignore the teaser
-!11794_ResNet18_ImageNet_input.png
-!11794_ResNet18_ImageNet_output.png
 
 *.zip
 
 scripts/
+
