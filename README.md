@@ -9,17 +9,6 @@ which can be found at https://arxiv.org/abs/2011.12505
     <img src="assets/framework.png" width="80%" />
 </p>
 
-### Visualize Result
-Input Image             |  Reconstruction from Inverting Gradients
-:-------------------------:|:-------------------------:
-![](assets/normal_ori.png)  |  ![](assets/normal_rec.png)
-
-Transformed Image             |  Reconstruction from Inverting Gradients
-:-------------------------:|:-------------------------:
-![](assets/defense_ori.png)  |  ![](assets/defense_rec.png)
-
-
-[Model: standard ResNet20, trained on cifar100 data. The image is from the validation set.]
 
 ### Abstract
 Collaborative learning has gained great popularity due to its benefit of data privacy protection: participants can jointly train a Deep Learning model without sharing their training sets. However, recent works discovered that an adversary can fully recover the sensitive training samples from the shared gradients. Such reconstruction attacks pose severe threats to collaborative learning. Hence, effective mitigation solutions are urgently desired.
@@ -53,6 +42,17 @@ python -u searchalg/search_best.py --arch=ResNet20-4 --data=cifar100
 ```
 bash benchmark/run/benchmark_attack.sh
 ```
+
+### Visualize Result
+Input Image             |  Reconstruction from Inverting Gradients
+:-------------------------:|:-------------------------:
+![](assets/normal_ori.png)  |  ![](assets/normal_rec.png)
+
+Transformed Image             |  Reconstruction from Inverting Gradients
+:-------------------------:|:-------------------------:
+![](assets/defense_ori.png)  |  ![](assets/defense_rec.png)
+
+[Model: standard ResNet20, trained on cifar100 data. The image is from the validation set.]
 
 
 # Acknowledgement 
