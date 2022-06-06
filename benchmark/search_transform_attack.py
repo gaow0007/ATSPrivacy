@@ -31,6 +31,7 @@ parser.add_argument('--rlabel', default=False, type=bool, help='rlabel')
 parser.add_argument('--arch', default=None, required=True, type=str, help='Vision model.')
 parser.add_argument('--data', default=None, required=True, type=str, help='Vision dataset.')
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
+parser.add_argument('--num_samples', default=5, type=int, help='Images per class')
 opt = parser.parse_args()
 
 
@@ -45,7 +46,26 @@ mode = opt.mode
 assert mode in ['normal', 'aug', 'crop']
 num_images = 1
 
+def similarity_measures(img_batch, ref_batch, batched=True, method='fsim'):
+        
+    from image_similarity_measures.quality_metrics import fsim, issm, rmse, sam, sre, ssim, uiq
+    methods = {'fsim':fsim, 'issm':issm, 'rmse':rmse, 'sam':sam, 'sre':sre, 'ssim':ssim, 'uiq':uiq }
 
+    def get_similarity(img_in, img_ref):
+        return methods[method](img_in.permute(1,2,0).numpy(), img_ref.permute(1,2,0).numpy())
+        
+    if not batched:
+        sim = get_similarity(img_batch.detach(), ref_batch)
+    else:
+        [B, C, m, n] = img_batch.shape
+        sim_list = []
+        for sample in range(B):
+            sim_list.append(get_similarity(img_batch.detach()[sample, :, :, :], ref_batch[sample, :, :, :]))
+
+        sim_list = np.array(sim_list)
+        sim_list = sim_list[~np.isnan(sim_list)]
+        sim = np.mean(sim_list)
+    return sim
 
 def eval_score(jacob, labels=None):
     corrs = np.corrcoef(jacob)
@@ -182,38 +202,52 @@ def main():
     import time
     start = time.time()
 
-    if True:
-        sample_list = [200+i*5 for i in range(100)]
-        metric_list = list()
-        for attack_id, idx in enumerate(sample_list):
-            metric = reconstruct(idx, model, loss_fn, trainloader, validloader)
-            metric_list.append(metric)
-            print('attach {}th in {}, metric {}'.format(attack_id, opt.aug_list, metric))
+    compute_privacy_score = True
+    compute_acc_score = True
 
-    pathname = 'search/data_{}_arch_{}/{}'.format(opt.data, opt.arch, opt.aug_list)
-    root_dir = os.path.dirname(pathname)
-    if not os.path.exists(root_dir):
-        os.makedirs(root_dir)
-    if len(metric_list) > 0:
-        print(np.mean(metric_list))
-        np.save(pathname, metric_list)
+    sample_list = {}
+    if opt.data == 'cifar100':
+        num_classes = 100
+    elif opt.data == 'FashionMinist':
+        num_classes = 10
+    for i in range(num_classes):
+        sample_list[i] = []
+    for idx, (_, label) in enumerate(validloader.dataset):   
+        sample_list[label].append(idx)
 
+    if compute_privacy_score:
+        num_samples = opt.num_samples
+        for label in range(num_classes):
+            metric = []
+            for idx in range(num_samples):
+                metric.append(reconstruct(sample_list[label][idx], model, loss_fn, trainloader, validloader))
+                print('attach {}th in class {}, auglist:{} metric {}'.format(idx, label, opt.aug_list, metric))
+            metric_list.append(np.mean(metric,axis=0))
+
+        pathname = 'search/data_{}_arch_{}/{}'.format(opt.data, opt.arch, opt.aug_list)
+        root_dir = os.path.dirname(pathname)
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        if len(metric_list) > 0:
+            print(np.mean(metric_list))
+            np.save(pathname, metric_list)
+    if compute_acc_score:
     # maybe need old_state_dict
-    model.load_state_dict(old_state_dict)
-    score_list = list()
-    for run in range(10):
-        large_samle_list = [200 + run  * 100 + i for i in range(100)]
-        score = accuracy_metric(large_samle_list, model, loss_fn, trainloader, validloader)
-        score_list.append(score)
+        model.load_state_dict(old_state_dict)
+        score_list = list()
+        for run in range(10):
+            large_samle_list = [200 + run  * 100 + i for i in range(100)]
+            score = accuracy_metric(large_samle_list, model, loss_fn, trainloader, validloader)
+            score_list.append(score)
     
-    print('time cost ', time.time() - start)
+        print('time cost ', time.time() - start)
     
-    pathname = 'accuracy/data_{}_arch_{}/{}'.format(opt.data, opt.arch, opt.aug_list)
-    root_dir = os.path.dirname(pathname)
-    if not os.path.exists(root_dir):
-        os.makedirs(root_dir)
-    np.save(pathname, score_list)
-    print(score_list)
+        pathname = 'accuracy/data_{}_arch_{}/{}'.format(opt.data, opt.arch, opt.aug_list)
+        root_dir = os.path.dirname(pathname)
+        if not os.path.exists(root_dir):
+            os.makedirs(root_dir)
+        np.save(pathname, score_list)
+        print(score_list)
 
 
 
