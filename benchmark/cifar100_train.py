@@ -23,7 +23,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import policy
 
-from benchmark.comm import create_model, build_transform, preprocess, create_config
+from benchmark.comm import create_model, build_transform, preprocess, create_config, vit_preprocess
 
 
 
@@ -58,10 +58,13 @@ def create_save_dir():
 def main():
     setup = inversefed.utils.system_startup()
     defs = inversefed.training_strategy('conservative'); defs.epochs = opt.epochs
-    loss_fn, trainloader, validloader = preprocess(opt, defs)
+    if opt.arch not in ['vit']: 
+        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
+        model = create_model(opt)
+    else: 
+        loss_fn, trainloader, validloader, model = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
 
     # init model
-    model = create_model(opt)
     model.to(**setup)
     save_dir = create_save_dir()
     if not os.path.exists(save_dir):
@@ -75,8 +78,11 @@ def main():
 def evaluate():
     setup = inversefed.utils.system_startup()
     defs = inversefed.training_strategy('conservative'); defs.epochs=opt.epochs
-    loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
-    model = create_model(opt)
+    if opt.arch not in ['vit']: 
+        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
+        model = create_model(opt)
+    else: 
+        loss_fn, trainloader, validloader, model = vit_preprocess(opt, defs, valid=False)
     model.to(**setup)
     root = create_save_dir()
 

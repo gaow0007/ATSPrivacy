@@ -43,15 +43,27 @@ def step(model, loss_fn, dataloader, optimizer, scheduler, defs, setup, stats):
     ds = torch.as_tensor(consts.cifar10_std, **setup)[:, None, None]
 
     epoch_loss, epoch_metric = 0, 0
-    for batch, (inputs, targets) in enumerate(dataloader):
+    for batch, data_info in enumerate(dataloader):
+        if batch % 10 == 0: 
+            print('run [{}/{}]'.format(batch, len(dataloader)))
         # Prep Mini-Batch
         optimizer.zero_grad()
         # Transfer to GPU
-        inputs = inputs.to(**setup)
-        targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
-        # Get loss
-        outputs = model(inputs)
-        loss, _, _ = loss_fn(outputs, targets)
+        if isinstance(data_info, dict): 
+            for key in data_info.keys(): 
+                data_info[key] = data_info[key].to('cuda')
+            model_output = model(**data_info)
+            # import pdb; pdb.set_trace() 
+            loss = model_output.loss
+            targets = data_info['labels']
+            outputs = model_output.logits 
+        else: 
+            inputs, targets = data_info
+            inputs = inputs.to(**setup)
+            targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
+            # Get loss
+            outputs = model(inputs)
+            loss, _, _ = loss_fn(outputs, targets)
 
 
         epoch_loss += loss.item()
@@ -77,14 +89,24 @@ def validate(model, loss_fn, dataloader, defs, setup, stats):
     """Validate model effectiveness of val dataset."""
     epoch_loss, epoch_metric = 0, 0
     with torch.no_grad():
-        for batch, (inputs, targets) in enumerate(dataloader):
+        for batch, data_info in enumerate(dataloader):
             # Transfer to GPU
-            inputs = inputs.to(**setup)
-            targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
-
-            # Get loss and metric
-            outputs = model(inputs)
-            loss, _, _ = loss_fn(outputs, targets)
+            if isinstance(data_info, dict): 
+                for key in data_info.keys(): 
+                    data_info[key] = data_info[key].to('cuda')
+                model_output = model(**data_info)
+                # import pdb; pdb.set_trace() 
+                loss = model_output.loss
+                targets = data_info['labels']
+                outputs = model_output.logits 
+            else: 
+                inputs, targets = data_info
+                inputs = inputs.to(**setup)
+                targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
+                # Get loss
+                outputs = model(inputs)
+                loss, _, _ = loss_fn(outputs, targets)
+            
             metric, name, _ = loss_fn.metric(outputs, targets)
 
             epoch_loss += loss.item()

@@ -3,6 +3,7 @@
 import torch
 import torchvision
 import torch.nn as nn
+from transformers import ViTFeatureExtractor
 
 from torchvision.models.resnet import Bottleneck
 from .revnet import iRevNet
@@ -166,6 +167,8 @@ def construct_model(model, num_classes=10, seed=None, num_channels=3, modelkey=N
                             in_shape=in_shape, mult=4)
     elif model == 'LeNetZhu':
         model = LeNetZhu(num_channels=num_channels, num_classes=num_classes)
+    elif model == 'vit': 
+        pass
     else:
         raise NotImplementedError('Model not implemented.')
 

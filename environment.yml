@@ -3,6 +3,11 @@ channels:
   - pytorch
   - defaults
 dependencies:
+  - torch==1.8.1+cu101
+  - torchaudio==0.8.1
+  - torchvision==0.9.1+cu101
+  - transformers==4.22.2
+  - datasets==2.5.2
   - _libgcc_mutex=0.1=main
   - attrs=19.3.0=py_0
   - backcall=0.1.0=py38_0
@@ -85,12 +90,10 @@ dependencies:
   - pyrsistent=0.15.7=py38h7b6447c_0
   - python=3.8.1=h0371630_1
   - python-dateutil=2.8.1=py_0
-  - pytorch=1.4.0=py3.8_cuda10.1.243_cudnn7.6.3_0
   - pyzmq=18.1.1=py38he6710b0_0
   - qt=5.9.7=h5867ecd_1
   - qtconsole=4.6.0=py_1
   - readline=7.0=h7b6447c_5
-  - scipy=1.4.1=py38h0b6359f_0
   - send2trash=1.5.0=py38_0
   - setuptools=45.2.0=py38_0
   - sip=4.19.13=py38he6710b0_0
@@ -99,7 +102,6 @@ dependencies:
   - terminado=0.8.3=py38_0
   - testpath=0.4.4=py_0
   - tk=8.6.8=hbc83047_0
-  - torchvision=0.5.0=py38_cu101
   - tornado=6.0.3=py38h7b6447c_3
   - traitlets=4.3.3=py38_0
   - wcwidth=0.1.8=py_0

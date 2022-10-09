@@ -6,13 +6,26 @@ import torchvision
 import inversefed
 from inversefed.data.data_processing import _build_cifar100, _get_meanstd
 import torchvision.transforms as transforms
+from torchvision.transforms import (CenterCrop, 
+                                    Compose, 
+                                    Normalize, 
+                                    RandomHorizontalFlip,
+                                    RandomResizedCrop, 
+                                    Resize, 
+                                    ToTensor)
 import argparse
 from autoaugment import SubPolicy
 from inversefed.data.data_processing import _build_cifar100, _get_meanstd
-from inversefed.data.loss import LabelSmoothing
+from inversefed.data.loss import Classification, LabelSmoothing
 from inversefed.utils import Cutout
 import torch.nn.functional as F
+
 import policy
+from datasets import load_dataset
+from transformers import ViTForImageClassification
+from transformers import ViTFeatureExtractor
+
+
 policies = policy.policies
 
 
@@ -45,6 +58,49 @@ def construct_policy(policy_list):
         return sub_transform([policy_list])
     else:
         raise NotImplementedError
+
+
+
+def vit_build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
+    mode = opt.mode
+    if opt.data == 'cifar100':
+        data_mean, data_std = inversefed.consts.cifar10_mean, inversefed.consts.cifar10_std
+    elif opt.data == 'FashionMinist':
+        data_mean, data_std  = (0.1307,), (0.3081,)
+    else:
+        raise NotImplementedError
+
+    # data_mean, data_std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+    if mode !=  'crop':
+        transform_list = list()
+
+    elif mode == 'crop':
+        transform_list = [transforms.RandomCrop(32, padding=4),
+                            transforms.RandomHorizontalFlip()]
+
+    if len(policy_list) > 0 and mode == 'aug':
+
+        transform_list = [transforms.RandomCrop(32, padding=4),
+                            transforms.RandomHorizontalFlip()]
+        transform_list.append(construct_policy(policy_list))
+
+
+    if opt.data == 'FashionMinist':
+        transform_list = [lambda x: transforms.functional.to_grayscale(x, num_output_channels=3)] + transform_list
+        transform_list.append(lambda x: transforms.functional.to_grayscale(x, num_output_channels=1))
+        transform_list.append(transforms.Resize(32))
+
+
+    print(transform_list)
+
+
+    transform_list.extend([
+        transforms.ToTensor(),
+        transforms.Normalize(data_mean, data_std) if normalize else transforms.Lambda(lambda x: x),
+    ])
+
+    transform = transforms.Compose(transform_list)
+    return transform
 
 
 def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
@@ -97,6 +153,71 @@ def split(aug_list):
         for aug in aug_list.split('+'):
             ret_list.append([int(idx) for idx in aug.split('-')])
         return ret_list
+
+
+
+def vit_preprocess(opt, defs, valid=False): 
+    data_arrow = load_dataset('cifar10')
+    train_ds = data_arrow['train']
+    val_ds = data_arrow['test']
+    id2label = {id:label for id, label in enumerate(train_ds.features['label'].names)}
+    label2id = {label:id for id,label in id2label.items()}
+    # data transform 
+    from torchvision.transforms import (CenterCrop, 
+                                        Compose, 
+                                        Normalize, 
+                                        RandomHorizontalFlip,
+                                        RandomResizedCrop, 
+                                        Resize, 
+                                        ToTensor)
+    
+    feature_extractor = ViTFeatureExtractor.from_pretrained("google/vit-base-patch16-224-in21k")
+    normalize = Normalize(mean=feature_extractor.image_mean, std=feature_extractor.image_std)
+    _train_transforms = Compose(
+            [
+                RandomResizedCrop(feature_extractor.size),
+                RandomHorizontalFlip(),
+                ToTensor(),
+                normalize,
+            ]
+        )
+
+    _val_transforms = Compose(
+            [
+                Resize(feature_extractor.size),
+                CenterCrop(feature_extractor.size),
+                ToTensor(),
+                normalize,
+            ]
+        )
+
+    def train_transforms(examples):
+        examples['pixel_values'] = [_train_transforms(image.convert("RGB")) for image in examples['img']]
+        return examples
+
+    def val_transforms(examples):
+        examples['pixel_values'] = [_val_transforms(image.convert("RGB")) for image in examples['img']]
+        return examples
+
+    def collate_fn(examples):
+        pixel_values = torch.stack([example["pixel_values"] for example in examples])
+        labels = torch.tensor([example["label"] for example in examples])
+        return {"pixel_values": pixel_values, "labels": labels}
+    train_ds.set_transform(train_transforms)
+    val_ds.set_transform(val_transforms)
+    trainloader = torch.utils.data.DataLoader(train_ds, collate_fn=collate_fn, batch_size=128, 
+            shuffle=True, drop_last=False, num_workers=4, pin_memory=True)
+    validloader = torch.utils.data.DataLoader(val_ds, collate_fn=collate_fn, batch_size=256,
+            shuffle=False, drop_last=False, num_workers=4, pin_memory=True)
+    loss_fn = Classification()
+    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224-in21k',
+                                                  num_labels=10,
+                                                  id2label=id2label,
+                                                  label2id=label2id)
+    
+    return loss_fn, trainloader, validloader, model
+
+
 
 def preprocess(opt, defs, valid=False):
     if opt.data == 'cifar100':
