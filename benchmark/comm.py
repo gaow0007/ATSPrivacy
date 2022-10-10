@@ -63,7 +63,7 @@ def construct_policy(policy_list):
 
 
 
-def build_vit_transform(normalize=True, policy_list=list(), opt=None, defs=None):
+def build_vit_transform(normalize=True, policy_list=list(), opt=None, defs=None, mean_std=None, scale_size=None):
     from torchvision.transforms import (CenterCrop, 
                                         Compose, 
                                         Normalize, 
@@ -72,32 +72,32 @@ def build_vit_transform(normalize=True, policy_list=list(), opt=None, defs=None)
                                         Resize, 
                                         ToTensor)
     
-    feature_extractor = ViTFeatureExtractor.from_pretrained("google/vit-base-patch16-224-in21k")
-    normalize = Normalize(mean=feature_extractor.image_mean, std=feature_extractor.image_std)
+    mean, std = mean_std
+    normalize = Normalize(mean=mean, std=std)
     mode = opt.mode
 
     if mode !=  'crop':
         transform_list = list()
 
     elif mode == 'crop':
-        transform_list = [RandomResizedCrop(feature_extractor.size),
+        transform_list = [RandomResizedCrop(scale_size),
                             transforms.RandomHorizontalFlip()]
 
     if len(policy_list) > 0 and mode == 'aug':
 
-        transform_list = [RandomResizedCrop(feature_extractor.size),
+        transform_list = [RandomResizedCrop(scale_size),
                             transforms.RandomHorizontalFlip()]
         transform_list.append(construct_policy(policy_list))
 
-    transform_list.append(normalize)
+    transform_list.extend([ToTensor, normalize])
     _train_transforms = Compose(
             transform_list
         )
 
     _val_transforms = Compose(
             [
-                Resize(feature_extractor.size),
-                CenterCrop(feature_extractor.size),
+                Resize(scale_size),
+                CenterCrop(scale_size),
                 ToTensor(),
                 normalize,
             ]
@@ -171,13 +171,14 @@ def vit_preprocess(opt, defs, valid=False):
     data_arrow = load_dataset(opt.data)
     train_ds = data_arrow['train']
     val_ds = data_arrow['test']
-    id2label = {id:label for id, label in enumerate(train_ds.features['label'].names)}
+    label_key = 'fine_label' if opt.data=='cifar100' else 'label'
+    id2label = {id:label for id, label in enumerate(train_ds.features[label_key].names)}
     label2id = {label:id for id,label in id2label.items()}
     # data transform 
 
     def collate_fn(examples):
         pixel_values = torch.stack([example["pixel_values"] for example in examples])
-        labels = torch.tensor([example["label"] for example in examples])
+        labels = torch.tensor([example[label_key] for example in examples])
         return {"pixel_values": pixel_values, "labels": labels}
     
     if len(opt.aug_list) > 0:
@@ -185,7 +186,12 @@ def vit_preprocess(opt, defs, valid=False):
     else:
         policy_list = []
     
-    train_transforms, val_transforms = build_vit_transform(True, policy_list, opt, defs)
+    pretrain_path = 'google/vit-base-patch16-224-in21k' if not os.path.exists('/root/.cache/huggingface/transformers/vit-base-patch16-224-in21k') else '/root/.cache/huggingface/transformers/vit-base-patch16-224-in21k'
+    feature_extractor = ViTFeatureExtractor.from_pretrained(pretrain_path)
+    mean, std =feature_extractor.image_mean, feature_extractor.image_std
+    scale_size = feature_extractor.size 
+
+    train_transforms, val_transforms = build_vit_transform(True, policy_list, opt, defs, (mean,std), scale_size)
     train_ds.set_transform(train_transforms)
     val_ds.set_transform(val_transforms)
     trainloader = torch.utils.data.DataLoader(train_ds, collate_fn=collate_fn, batch_size=128, 
@@ -193,12 +199,12 @@ def vit_preprocess(opt, defs, valid=False):
     validloader = torch.utils.data.DataLoader(val_ds, collate_fn=collate_fn, batch_size=256,
             shuffle=False, drop_last=False, num_workers=4, pin_memory=True)
     loss_fn = Classification()
-    model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224-in21k',
-                                                  num_labels=10,
+    model = ViTForImageClassification.from_pretrained(pretrain_path,
+                                                  num_labels=len(id2label.keys()),
                                                   id2label=id2label,
                                                   label2id=label2id)
     
-    return loss_fn, trainloader, validloader, model
+    return loss_fn, trainloader, validloader, model, (mean,std), scale_size
 
 
 
