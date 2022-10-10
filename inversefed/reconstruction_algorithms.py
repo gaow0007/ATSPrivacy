@@ -44,7 +44,7 @@ def _validate_config(config):
 class GradientReconstructor():
     """Instantiate a reconstruction algorithm."""
 
-    def __init__(self, model, mean_std=(0.0, 1.0), config=DEFAULT_CONFIG, num_images=1):
+    def __init__(self, model, mean_std=(0.0, 1.0), config=DEFAULT_CONFIG, num_images=1, loss_fn=torch.nn.CrossEntropyLoss(reduction='mean')):
         """Initialize with algorithm setup."""
         self.config = _validate_config(config)
         self.model = model
@@ -55,7 +55,8 @@ class GradientReconstructor():
         if self.config['scoring_choice'] == 'inception':
             self.inception = InceptionScore(batch_size=1, setup=self.setup)
 
-        self.loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
+        # self.loss_fn = torch.nn.CrossEntropyLoss(reduction='mean')
+        self.loss_fn = loss_fn
         self.iDLG = True
 
     def reconstruct(self, input_data, labels, img_shape=(3, 32, 32), dryrun=False, eval=True, tol=None):

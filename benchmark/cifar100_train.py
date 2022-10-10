@@ -62,7 +62,7 @@ def main():
         loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
         model = create_model(opt)
     else: 
-        loss_fn, trainloader, validloader, model = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
+        loss_fn, trainloader, validloader, model, _, _ = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
 
     # init model
     model.to(**setup)

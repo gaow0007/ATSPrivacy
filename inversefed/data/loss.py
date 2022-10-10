@@ -98,11 +98,19 @@ class Classification(Loss):
         """Return l(x, y)."""
         name = 'CrossEntropy'
         format = '1.5f'
-        if x is None:
-            return name, format
+        # if x is None:
+        #     return name, format
+        # else:
+        #     value = 0.5 * self.loss_fn(x, y)
+        #     return value, name, format
+
+        if isinstance(x, tuple):
+            value = 0.5 * self.loss_fn(x[0], y)
         else:
             value = 0.5 * self.loss_fn(x, y)
-            return value, name, format
+            
+        return value
+            
 
     def metric(self, x=None, y=None):
         """The actually sought metric."""
