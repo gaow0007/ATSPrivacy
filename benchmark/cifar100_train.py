@@ -38,6 +38,8 @@ parser.add_argument('--mode', default=None, required=True, type=str, help='Mode.
 parser.add_argument('--rlabel', default=False, type=bool, help='remove label.')
 parser.add_argument('--evaluate', default=False, type=bool, help='Evaluate')
 
+parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
+
 opt = parser.parse_args()
 
 # init env
@@ -52,6 +54,8 @@ assert mode in ['normal', 'aug', 'crop']
 
 
 def create_save_dir():
+    if opt.tiny_data:
+        return 'checkpoints/tiny_data_{}_arch_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.mode, opt.aug_list, opt.rlabel)
     return 'checkpoints/data_{}_arch_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.mode, opt.aug_list, opt.rlabel)
 
 
@@ -62,6 +66,7 @@ def main():
         loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
         model = create_model(opt)
     else: 
+        # defs = inversefed.training_strategy('vitadam'); defs.epochs = opt.epochs # for tiny data
         loss_fn, trainloader, validloader, model, _, _ = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
 
     # init model

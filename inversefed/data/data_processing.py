@@ -11,6 +11,7 @@ from ..consts import *
 
 from .data import _build_bsds_sr, _build_bsds_dn
 from .loss import Classification, PSNR
+from .datasets import CelebAForGender
 
 
 def construct_dataloaders(dataset, defs, data_path='~/data', shuffle=True, normalize=True):
@@ -31,6 +32,9 @@ def construct_dataloaders(dataset, defs, data_path='~/data', shuffle=True, norma
         loss_fn = Classification()
     elif dataset == 'ImageNet':
         trainset, validset = _build_imagenet(path, defs.augmentations, normalize)
+        loss_fn = Classification()
+    elif dataset == 'CelebA':
+        trainset, validset = _build_celeba(path, defs.augmentations, normalize)
         loss_fn = Classification()
     elif dataset == 'BSDS-SR':
         trainset, validset = _build_bsds_sr(path, defs.augmentations, normalize, upscale_factor=3, RGB=True)
@@ -174,8 +178,11 @@ def _build_mnist_gray(data_path, augmentations=True, normalize=True):
 def _build_imagenet(data_path, augmentations=True, normalize=True):
     """Define ImageNet with everything considered."""
     # Load data
-    trainset = torchvision.datasets.ImageNet(root=data_path, split='train', transform=transforms.ToTensor())
-    validset = torchvision.datasets.ImageNet(root=data_path, split='val', transform=transforms.ToTensor())
+    # trainset = torchvision.datasets.ImageNet(root=data_path, split='train', transform=transforms.ToTensor())
+    # validset = torchvision.datasets.ImageNet(root=data_path, split='val', transform=transforms.ToTensor())
+    data_path = os.path.join(data_path, 'imagenet-split-0') if not os.path.exists('/home/zx/nfs/server3/data/imagenet-split-0') else '/home/zx/nfs/server3/data/imagenet-split-0'
+    trainset = torchvision.datasets.ImageFolder(root=data_path + '/train', transform=transforms.ToTensor())
+    validset = torchvision.datasets.ImageFolder(root=data_path + '/val', transform=transforms.ToTensor())
 
     if imagenet_mean is None:
         data_mean, data_std = _get_meanstd(trainset)
@@ -201,6 +208,39 @@ def _build_imagenet(data_path, augmentations=True, normalize=True):
 
     return trainset, validset
 
+def _build_celeba(data_path, augmentations=True, normalize=True):
+    """Define celeba with everything considered."""
+    # Load data
+    # trainset = torchvision.datasets.ImageNet(root=data_path, split='train', transform=transforms.ToTensor())
+    # validset = torchvision.datasets.ImageNet(root=data_path, split='val', transform=transforms.ToTensor())
+
+    data_path = data_path if not os.path.exists('/home/zx/nfs/server3/data/') else '/home/zx/nfs/server3/data/'
+    trainset = CelebAForGender(data_path, split='train', transform=transforms.ToTensor())
+    validset = CelebAForGender(data_path, split='valid', transform=transforms.ToTensor())
+
+    if celeba_mean is None:
+        data_mean, data_std = _get_meanstd(trainset)
+    else:
+        data_mean, data_std = celeba_mean, celeba_std
+
+    # Organize preprocessing
+    transform = transforms.Compose([
+        transforms.Resize(128),
+        # transforms.CenterCrop(128),
+        transforms.ToTensor(),
+        transforms.Normalize(data_mean, data_std) if normalize else transforms.Lambda(lambda x : x)])
+    if augmentations:
+        transform_train = transforms.Compose([
+            transforms.RandomResizedCrop(128),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(data_mean, data_std) if normalize else transforms.Lambda(lambda x : x)])
+        trainset.transform = transform_train
+    else:
+        trainset.transform = transform
+    validset.transform = transform
+
+    return trainset, validset
 
 def _get_meanstd(dataset):
     cc = torch.cat([trainset[i][0].reshape(3, -1) for i in range(len(trainset))], dim=1)

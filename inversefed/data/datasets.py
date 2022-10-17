@@ -10,7 +10,7 @@ import torch.utils.data as data
 from os import listdir
 from os.path import join
 from PIL import Image
-
+from torchvision.datasets import CelebA
 
 def _is_image_file(filename):
     return any(filename.endswith(extension) for extension in [".png", ".jpg", ".jpeg"])
@@ -60,3 +60,17 @@ class DatasetFromFolder(data.Dataset):
     def __len__(self):
         """Length is amount of files found."""
         return len(self.image_filenames) * self.replicate
+
+        
+
+from typing import Any, Callable, List, Optional, Tuple, Union
+
+class CelebAForGender(CelebA):
+    def __init__(self, root: str, split: str = "train", target_type: Union[List[str], str] = "attr", transform: Optional[Callable] = None, target_transform: Optional[Callable] = None, download: bool = False) -> None:
+        super().__init__(root, split, target_type, transform, target_transform, download)
+    
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        X, meta =  super().__getitem__(index) 
+        gender_label = meta[20]
+
+        return X, gender_label

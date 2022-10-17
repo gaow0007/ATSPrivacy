@@ -14,3 +14,5 @@ mnist_mean = (0.13066373765468597,)
 mnist_std = (0.30810782313346863,)
 imagenet_mean = [0.485, 0.456, 0.406]
 imagenet_std = [0.229, 0.224, 0.225]
+celeba_mean = [0.50612009, 0.42543493, 0.38282761] # https://blog.csdn.net/HuanCaoO/article/details/106965082
+celeba_std = [0.26589054, 0.24521921, 0.24127836]

@@ -109,6 +109,7 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
         output, stats = rec_machine.reconstruct(input_gradient, None, img_shape=shape) # reconstruction label
     else:
         output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape) # specify label
+        # output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=True) # specify label
 
     output_denormalized = output * ds + dm
     input_denormalized = ground_truth * ds + dm
@@ -119,8 +120,8 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    torchvision.utils.save_image(output_denormalized.cpu().clone(), '{}/rec_{}.jpg'.format(save_dir, idx))
-    torchvision.utils.save_image(input_denormalized.cpu().clone(), '{}/ori_{}.jpg'.format(save_dir, idx))
+    torchvision.utils.save_image(output_denormalized.cpu().clone(), '{}/rec_{}.png'.format(save_dir, idx))
+    torchvision.utils.save_image(input_denormalized.cpu().clone(), '{}/ori_{}.png'.format(save_dir, idx))
 
 
     test_mse = (output_denormalized.detach() - input_denormalized).pow(2).mean().cpu().detach().numpy()
@@ -132,7 +133,7 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     test_psnr = inversefed.metrics.psnr(output_denormalized, input_denormalized)
 
     return {'test_mse': test_mse,
-        'feat_mse': feat_mse,
+        'feat_mse': feat_mse.detach(), # if not, the computation graph would store in list for each iteration, case OOM error. https://discuss.pytorch.org/t/memory-leak-when-appending-tensors-to-a-list/25937 If you store something from your model (for debugging purpose) and don’t need to calculate gradients with it anymore, I would recommend to call detach on it as it won’t have any effects if the tensor is already detached.
         'test_psnr': test_psnr
     }
 
@@ -158,6 +159,10 @@ def main():
             dm = torch.Tensor([0.1307]).view(1, 1, 1).cuda()
             ds = torch.Tensor([0.3081]).view(1, 1, 1).cuda()
             shape = (1, 32, 32)
+        elif opt.data == 'ImageNet':
+            dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
+            ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
+            shape = (3, 224, 224)
         else:
             raise NotImplementedError
     else: 
@@ -173,12 +178,6 @@ def main():
             shape = (1, scale_size, scale_size)
 
     label_key = 'fine_label' if opt.data == 'cifar100' else 'label'
-    model.to(**setup)
-    if opt.epochs == 0:
-        trained_model = False
-        
-    if trained_model:
-        checkpoint_dir = create_checkpoint_dir()
 
     # loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
     # model = create_model(opt)
@@ -205,8 +204,17 @@ def main():
                 param.requires_grad = False
 
     model.eval()
-    sample_list = [i for i in range(100)]
+
+    save_dir = create_save_dir()
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     metric_list = list()
+    #resume
+    metric_path = save_dir + '/metric.npy'
+    if os.path.exists(metric_path):
+        metric_list = np.load(metric_path, allow_pickle=True).tolist()
+
+    sample_list = [i for i in range(100)]
     mse_loss = 0
     for attack_id, idx in enumerate(sample_list):
         if idx < opt.resume:
@@ -214,8 +222,8 @@ def main():
         print('attach {}th in {}'.format(idx, opt.aug_list))
         metric = reconstruct(idx, model, loss_fn, trainloader, validloader, (dm, ds), shape, label_key)
         metric_list.append(metric)
-    save_dir = create_save_dir()
-    np.save('{}/metric.npy'.format(save_dir), metric_list)
+        #save metric after each reconstruction
+        np.save('{}/metric.npy'.format(save_dir), metric_list)
 
 
 
