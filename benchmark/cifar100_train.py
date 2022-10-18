@@ -75,7 +75,8 @@ def main():
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     file = f'{save_dir}/{arch}_{defs.epochs}.pth'
-    inversefed.train(model, loss_fn, trainloader, validloader, defs, setup=setup, save_dir=save_dir)
+    # inversefed.train(model, loss_fn, trainloader, validloader, defs, setup=setup, save_dir=save_dir)
+    inversefed.train_pl(model, loss_fn, trainloader, validloader, defs, setup=setup, save_dir=save_dir)
     torch.save(model.state_dict(), f'{file}')
     model.eval()
 
