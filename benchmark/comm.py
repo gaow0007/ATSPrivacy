@@ -1,3 +1,4 @@
+import imp
 import os, sys
 from random import random, shuffle
 sys.path.insert(0, './')
@@ -26,6 +27,7 @@ from datasets import load_dataset
 from transformers import ViTForImageClassification
 from transformers import ViTFeatureExtractor
 import random
+from pathlib import Path
 
 
 policies = policy.policies
@@ -207,8 +209,8 @@ def vit_preprocess(opt, defs, valid=False):
         policy_list = split(opt.aug_list)
     else:
         policy_list = []
-    
-    pretrain_path = 'google/vit-base-patch16-224-in21k' if not os.path.exists('/root/.cache/huggingface/transformers/vit-base-patch16-224-in21k') else '/root/.cache/huggingface/transformers/vit-base-patch16-224-in21k'
+    home = Path.home().as_posix() 
+    pretrain_path = 'google/vit-base-patch16-224-in21k' if not os.path.exists(home + '/.cache/huggingface/transformers/vit-base-patch16-224-in21k') else home + '/.cache/huggingface/transformers/vit-base-patch16-224-in21k'
     feature_extractor = ViTFeatureExtractor.from_pretrained(pretrain_path)
     mean, std =feature_extractor.image_mean, feature_extractor.image_std
     scale_size = feature_extractor.size 
