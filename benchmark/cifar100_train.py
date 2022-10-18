@@ -38,6 +38,7 @@ parser.add_argument('--mode', default=None, required=True, type=str, help='Mode.
 parser.add_argument('--rlabel', default=False, type=bool, help='remove label.')
 parser.add_argument('--evaluate', default=False, type=bool, help='Evaluate')
 
+parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
 parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
 
 opt = parser.parse_args()
@@ -76,7 +77,7 @@ def main():
         os.makedirs(save_dir)
     file = f'{save_dir}/{arch}_{defs.epochs}.pth'
     # inversefed.train(model, loss_fn, trainloader, validloader, defs, setup=setup, save_dir=save_dir)
-    inversefed.train_pl(model, loss_fn, trainloader, validloader, defs, setup=setup, save_dir=save_dir)
+    inversefed.train_pl(model, loss_fn, trainloader, validloader, defs, setup=setup, save_dir=save_dir, opt=opt)
     torch.save(model.state_dict(), f'{file}')
     model.eval()
 

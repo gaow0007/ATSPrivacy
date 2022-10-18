@@ -65,7 +65,7 @@ class LitModule(pl.LightningModule):
         # training_step defines the train loop. It is independent of forward
         imgs, labels = batch
         preds = self.model(imgs)
-        loss,_,_ = self.loss_fn(preds, labels)
+        loss = self.loss_fn(preds, labels)
         acc = (preds.argmax(dim=-1) == labels).float().mean()
 
         self.log('train_acc', acc)
@@ -108,7 +108,7 @@ class LitModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         imgs, labels = batch
         preds = self.model(imgs)
-        loss,_,_ = self.loss_fn(preds, labels)
+        loss = self.loss_fn(preds, labels)
         acc = (preds.argmax(dim=-1) == labels).float().mean()
 
         self.log('vaild_acc', acc)
