@@ -161,7 +161,8 @@ def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
             transform_list.append(construct_policy(policy_list))
 
     elif opt.data == 'CelebA':
-        transform_list = [transforms.Resize(128)]
+        # transform_list = [transforms.Resize((128, 128))]
+        transform_list = [transforms.Resize((112, 112))]
         
         if len(policy_list) > 0 and mode == 'aug':
             transform_list.append(construct_policy(policy_list))

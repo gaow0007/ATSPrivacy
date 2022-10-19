@@ -227,7 +227,8 @@ def _build_celeba(data_path, augmentations=True, normalize=True):
 
     # Organize preprocessing
     transform = transforms.Compose([
-        transforms.Resize(128),
+        # transforms.Resize((128,128)),
+        transforms.Resize((112,112)),
         # transforms.CenterCrop(128),
         transforms.ToTensor(),
         transforms.Normalize(data_mean, data_std) if normalize else transforms.Lambda(lambda x : x)])
