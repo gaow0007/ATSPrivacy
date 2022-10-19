@@ -377,10 +377,13 @@ def reconstruction_costs(gradients, input_gradient, cost_fn='l2', indices='def',
         for i in indices:
             if cost_fn == 'l2':
                 costs += ((trial_gradient[i] - input_gradient[i]).pow(2)).sum() * weights[i]
+                cnt = 1
             elif cost_fn == 'l1':
                 costs += ((trial_gradient[i] - input_gradient[i]).abs()).sum() * weights[i]
+                cnt = 1
             elif cost_fn == 'max':
                 costs += ((trial_gradient[i] - input_gradient[i]).abs()).max() * weights[i]
+                cnt = 1
             elif cost_fn == 'sim':
                 costs -= (trial_gradient[i] * input_gradient[i]).sum() * weights[i]
                 pnorm[0] += trial_gradient[i].pow(2).sum() * weights[i]
