@@ -331,7 +331,7 @@ def preprocess(opt, defs, valid=False):
             policy_list = []
         if not valid:
             trainset.transform = build_transform(True, policy_list, opt, defs)
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128,
                     shuffle=True, drop_last=True, num_workers=24, pin_memory=True)
         if opt.tiny_data:
             print('Use tiny dataset')
@@ -343,7 +343,7 @@ def preprocess(opt, defs, valid=False):
 
         if valid:
             validset.transform = build_transform(True, policy_list, opt, defs)
-        validloader = torch.utils.data.DataLoader(validset, batch_size=64,
+        validloader = torch.utils.data.DataLoader(validset, batch_size=128,
                 shuffle=False, drop_last=True, num_workers=16, pin_memory=True)
 
         return loss_fn, trainloader, validloader
@@ -361,6 +361,7 @@ def create_config(opt):
                 lr=0.1,
                 optim='adam',
                 restarts=1,
+                # max_iterations=100, #debug
                 max_iterations=4800,
                 total_variation=1e-4,
                 init='randn',

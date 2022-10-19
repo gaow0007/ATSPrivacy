@@ -181,6 +181,7 @@ def _build_imagenet(data_path, augmentations=True, normalize=True):
     # trainset = torchvision.datasets.ImageNet(root=data_path, split='train', transform=transforms.ToTensor())
     # validset = torchvision.datasets.ImageNet(root=data_path, split='val', transform=transforms.ToTensor())
     data_path = os.path.join(data_path, 'imagenet-split-0') if not os.path.exists('/home/zx/nfs/server3/data/imagenet-split-0') else '/home/zx/nfs/server3/data/imagenet-split-0'
+    data_path = '/home/zx/data/imagenet-split-0'
     trainset = torchvision.datasets.ImageFolder(root=data_path + '/train', transform=transforms.ToTensor())
     validset = torchvision.datasets.ImageFolder(root=data_path + '/val', transform=transforms.ToTensor())
 
@@ -215,6 +216,7 @@ def _build_celeba(data_path, augmentations=True, normalize=True):
     # validset = torchvision.datasets.ImageNet(root=data_path, split='val', transform=transforms.ToTensor())
 
     data_path = data_path if not os.path.exists('/home/zx/nfs/server3/data/') else '/home/zx/nfs/server3/data/'
+    # data_path = '/home/zx/data'
     trainset = CelebAForGender(data_path, split='train', transform=transforms.ToTensor())
     validset = CelebAForGender(data_path, split='valid', transform=transforms.ToTensor())
 

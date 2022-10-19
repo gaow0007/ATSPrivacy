@@ -286,6 +286,8 @@ def main():
         sample_list[i] = []
     if opt.arch not in ['vit']:
         for idx, (_, label) in enumerate(validloader.dataset):   
+            if isinstance(label, torch.Tensor):
+                label = label.item()
             sample_list[label].append(idx)
     else:
         for idx, sample in enumerate(validloader.dataset):   
@@ -297,7 +299,7 @@ def main():
             metric = []
             for idx in range(num_samples):
                 metric.append(reconstruct(sample_list[label][idx], model, loss_fn, trainloader, validloader, label_key))
-                print('attach {}th in class {}, auglist:{} metric {}'.format(idx, label, opt.aug_list, metric))
+                # print('attach {}th in class {}, auglist:{} metric {}'.format(idx, label, opt.aug_list, metric))
             metric_list.append(np.mean(metric,axis=0))
 
         pathname = 'search/data_{}_arch_{}/{}'.format(opt.data, opt.arch, opt.aug_list)

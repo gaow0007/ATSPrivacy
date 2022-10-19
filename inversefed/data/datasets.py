@@ -73,4 +73,4 @@ class CelebAForGender(CelebA):
         X, meta =  super().__getitem__(index) 
         gender_label = meta[20]
 
-        return X, gender_label
+        return X, gender_label.item()
