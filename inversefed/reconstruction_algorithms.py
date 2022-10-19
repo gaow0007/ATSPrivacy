@@ -404,7 +404,9 @@ def reconstruction_costs(gradients, input_gradient, cost_fn='l2', indices='def',
                                                                    input_gradient[i].flatten(),
                                                                    0, 1e-10) * weights[i]
         if cost_fn == 'sim':
-            costs = 1 + costs / pnorm[0].sqrt() / pnorm[1].sqrt()
+            # costs = 1 + costs / pnorm[0].sqrt() / pnorm[1].sqrt()
+            norm = max(pnorm[0].sqrt() * pnorm[1].sqrt(), torch.tensor(1e-8, device=pnorm[0].device))
+            costs = 1 + costs / norm
         # Accumulate final costs
         total_costs += costs / cnt
     # print(type(gradients), len(gradients), type(gradients[0]), type(total_costs))
