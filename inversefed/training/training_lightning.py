@@ -152,15 +152,15 @@ def train_pl(model, loss_fn, trainloader, validloader, defs, setup=dict(dtype=to
     trainer = pl.Trainer(gpus=1,
                     max_epochs=defs.epochs,
                     logger=tb_logger,
-                    # val_check_interval=500,
-                    log_every_n_steps=20,
+                    val_check_interval=200,
+                    log_every_n_steps=50,
                     callbacks=[
                         ModelCheckpoint(
-                            save_top_k = -1,
+                            save_top_k = 1,
                             dirpath=save_dir,
                             filename='{epoch:03d}-{vaild_acc:.4f}',
-                            every_n_epochs = int(0.25 * defs.epochs),
-                            # save_last=True,
+                            every_n_epochs = int(0.1 * defs.epochs),
+                            save_last=True,
                             # save_on_train_epoch_end=True
                         )
                     ])

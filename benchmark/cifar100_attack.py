@@ -37,6 +37,9 @@ parser.add_argument('--data', default=None, required=True, type=str, help='Visio
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
 parser.add_argument('--resume', default=0, type=int, help='rlabel')
 
+
+parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
+parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
 opt = parser.parse_args()
 num_images = 1
 
@@ -189,7 +192,8 @@ def main():
         checkpoint_dir = create_checkpoint_dir()
         if 'normal' in checkpoint_dir:
             checkpoint_dir = checkpoint_dir.replace('normal', 'crop')
-        filename = os.path.join(checkpoint_dir, str(defs.epochs) + '.pth')
+        filename = os.path.join(checkpoint_dir, f'{opt.arch}_{defs.epochs}.pth')
+        # filename = os.path.join(checkpoint_dir, str(defs.epochs) + '.pth')
 
         if not os.path.exists(filename):
             filename = os.path.join(checkpoint_dir, str(defs.epochs - 1) + '.pth')
@@ -215,6 +219,14 @@ def main():
         metric_list = np.load(metric_path, allow_pickle=True).tolist()
 
     sample_list = [i for i in range(100)]
+
+    if opt.arch ==  'ResNet20-4' and opt.data == 'ImageNet':
+        valid_size = len(validloader.dataset)
+        sample_array = np.linspace(0, valid_size, 100, endpoint=False,dtype=np.int32)
+        sample_list = [int(i) for i in sample_array]
+
+        # sample_list = [25] #debug
+        
     mse_loss = 0
     for attack_id, idx in enumerate(sample_list):
         if idx < opt.resume:

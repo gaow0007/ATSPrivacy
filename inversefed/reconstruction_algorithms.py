@@ -1,5 +1,6 @@
 """Mechanisms for image reconstruction from parameter gradients."""
 
+from cmath import isinf
 import torch
 from collections import defaultdict, OrderedDict
 from inversefed.nn import MetaMonkey
@@ -406,5 +407,13 @@ def reconstruction_costs(gradients, input_gradient, cost_fn='l2', indices='def',
             costs = 1 + costs / pnorm[0].sqrt() / pnorm[1].sqrt()
         # Accumulate final costs
         total_costs += costs / cnt
-
+    # print(type(gradients), len(gradients), type(gradients[0]), type(total_costs))
+    if torch.isinf(total_costs):
+        print('inf', cost_fn, costs, cnt)
+        exit(0)
+    if torch.isnan(total_costs):
+        print('nan', cost_fn, costs, cnt)
+        exit(0)
+    # exit(0)
+    
     return total_costs / len(gradients)
