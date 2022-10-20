@@ -152,7 +152,7 @@ def main():
     print(opt)
 
     if opt.arch not in ['vit']: 
-        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
+        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
         model = create_model(opt)
         if opt.data == 'cifar100':
             dm = torch.as_tensor(inversefed.consts.cifar10_mean, **setup)[:, None, None]
@@ -175,7 +175,7 @@ def main():
         else:
             raise NotImplementedError
     else: 
-        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
+        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=True) # batch size rescale to 16
         dm, ds = mean_std
         if opt.data == 'cifar100':
             dm = torch.as_tensor(dm, **setup)[:, None, None]
