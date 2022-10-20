@@ -37,6 +37,7 @@ parser.add_argument('--data', default=None, required=True, type=str, help='Visio
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
 parser.add_argument('--resume', default=0, type=int, help='rlabel')
 
+parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use fix ckpt for attack')
 
 parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
 parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
@@ -63,6 +64,9 @@ def collate_fn(examples, label_key='fine_label'):
     return {"pixel_values": pixel_values, "labels": labels}
 
 def create_save_dir():
+    if opt.fix_ckpt:
+        return 'benchmark/images/data_{}_arch_{}_epoch_{}_optim_{}_mode_{}_auglist_{}_rlabel_{}_fix'.format(opt.data, opt.arch, opt.epochs, opt.optim, opt.mode, \
+            opt.aug_list, opt.rlabel)
     return 'benchmark/images/data_{}_arch_{}_epoch_{}_optim_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.epochs, opt.optim, opt.mode, \
         opt.aug_list, opt.rlabel)
 
@@ -144,6 +148,9 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
 
 
 def create_checkpoint_dir():
+    if opt.fix_ckpt:
+        return 'checkpoints/data_{}_arch_{}_mode_crop_auglist__rlabel_{}'.format(opt.data, opt.arch, opt.rlabel)
+        
     return 'checkpoints/data_{}_arch_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.mode, opt.aug_list, opt.rlabel)
 
 
@@ -152,7 +159,7 @@ def main():
     print(opt)
 
     if opt.arch not in ['vit']: 
-        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
+        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
         model = create_model(opt)
         if opt.data == 'cifar100':
             dm = torch.as_tensor(inversefed.consts.cifar10_mean, **setup)[:, None, None]
@@ -169,7 +176,7 @@ def main():
         else:
             raise NotImplementedError
     else: 
-        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
+        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=True) # batch size rescale to 16
         dm, ds = mean_std
         if opt.data == 'cifar100':
             dm = torch.as_tensor(dm, **setup)[:, None, None]
