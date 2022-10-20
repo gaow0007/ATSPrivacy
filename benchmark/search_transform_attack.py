@@ -258,7 +258,7 @@ def main():
         loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
         model = create_model(opt)
     else:
-        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
+        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=True) # batch size rescale to 16
     model.to(**setup)
     old_state_dict = copy.deepcopy(model.state_dict())
     model.load_state_dict(torch.load('checkpoints/tiny_data_{}_arch_{}/{}.pth'.format(opt.data, opt.arch, opt.epochs)))

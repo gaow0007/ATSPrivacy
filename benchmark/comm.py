@@ -163,7 +163,8 @@ def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
             transform_list.append(construct_policy(policy_list))
 
     elif opt.data == 'CelebA':
-        transform_list = [transforms.Resize(128)]
+        # transform_list = [transforms.Resize((128, 128))]
+        transform_list = [transforms.Resize((112, 112))]
         
         if len(policy_list) > 0 and mode == 'aug':
             transform_list.append(construct_policy(policy_list))
@@ -480,6 +481,22 @@ def create_config(opt):
         torch.cuda.manual_seed(seed)
         import random
         random.seed(seed)
+    elif opt.optim == 'inversed_large':
+        config = dict(signed=True,
+                boxed=True,
+                cost_fn='sim',
+                indices='def',
+                weights='equal',
+                lr=0.1,
+                optim='adam',
+                restarts=1,
+                # max_iterations=100, #debug
+                max_iterations=4800,
+                total_variation=1e-1,
+                init='randn',
+                filter='none',
+                lr_decay=True,
+                scoring_choice='loss')
     else:
         raise NotImplementedError
     return config

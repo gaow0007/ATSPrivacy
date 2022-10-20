@@ -173,6 +173,12 @@ def main():
             dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
             ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
             shape = (3, 224, 224)
+        elif opt.data == 'CelebA':
+            dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
+            ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
+            # shape = (3, 128, 128)
+            shape = (3, 112, 112)
+        
         else:
             raise NotImplementedError
     else: 

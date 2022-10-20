@@ -181,7 +181,7 @@ def _build_imagenet(data_path, augmentations=True, normalize=True):
     # trainset = torchvision.datasets.ImageNet(root=data_path, split='train', transform=transforms.ToTensor())
     # validset = torchvision.datasets.ImageNet(root=data_path, split='val', transform=transforms.ToTensor())
     data_path = os.path.join(data_path, 'imagenet-split-0') if not os.path.exists('/home/zx/nfs/server3/data/imagenet-split-0') else '/home/zx/nfs/server3/data/imagenet-split-0'
-    data_path = '/home/zx/data/imagenet-split-0'
+    # data_path = '/home/zx/data/imagenet-split-0'
     trainset = torchvision.datasets.ImageFolder(root=data_path + '/train', transform=transforms.ToTensor())
     validset = torchvision.datasets.ImageFolder(root=data_path + '/val', transform=transforms.ToTensor())
 
@@ -227,7 +227,8 @@ def _build_celeba(data_path, augmentations=True, normalize=True):
 
     # Organize preprocessing
     transform = transforms.Compose([
-        transforms.Resize(128),
+        # transforms.Resize((128,128)),
+        transforms.Resize((112,112)),
         # transforms.CenterCrop(128),
         transforms.ToTensor(),
         transforms.Normalize(data_mean, data_std) if normalize else transforms.Lambda(lambda x : x)])
