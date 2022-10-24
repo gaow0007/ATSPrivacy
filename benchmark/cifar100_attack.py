@@ -40,6 +40,9 @@ parser.add_argument('--resume', default=0, type=int, help='rlabel')
 
 parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
 parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
+parser.add_argument('--dryrun', default=False, action='store_true', help='Debug mode')
+parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use fix ckpt for attack')
+
 opt = parser.parse_args()
 num_images = 1
 
@@ -63,6 +66,9 @@ def collate_fn(examples, label_key='fine_label'):
     return {"pixel_values": pixel_values, "labels": labels}
 
 def create_save_dir():
+    if opt.fix_ckpt:
+        return 'benchmark/images/data_{}_arch_{}_epoch_{}_optim_{}_mode_{}_auglist_{}_rlabel_{}_fix'.format(opt.data, opt.arch, opt.epochs, opt.optim, opt.mode, \
+            opt.aug_list, opt.rlabel)
     return 'benchmark/images/data_{}_arch_{}_epoch_{}_optim_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.epochs, opt.optim, opt.mode, \
         opt.aug_list, opt.rlabel)
 
@@ -111,7 +117,7 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     if opt.rlabel:
         output, stats = rec_machine.reconstruct(input_gradient, None, img_shape=shape) # reconstruction label
     else:
-        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape) # specify label
+        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=opt.dryrun) # specify label
         # output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=True) # specify label
 
     output_denormalized = output * ds + dm
@@ -144,6 +150,8 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
 
 
 def create_checkpoint_dir():
+    if opt.fix_ckpt:
+        return 'checkpoints/data_{}_arch_{}_mode_crop_auglist__rlabel_{}'.format(opt.data, opt.arch, opt.rlabel)
     return 'checkpoints/data_{}_arch_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.mode, opt.aug_list, opt.rlabel)
 
 
@@ -166,7 +174,7 @@ def main():
             dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
             ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
             shape = (3, 224, 224)
-        elif opt.data == 'CelebA':
+        elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
             dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
             ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
             # shape = (3, 128, 128)
@@ -226,7 +234,7 @@ def main():
 
     sample_list = [i for i in range(100)]
 
-    if opt.arch ==  'ResNet20-4' and opt.data == 'ImageNet':
+    if opt.arch ==  'ResNet18_tv' and opt.data == 'ImageNet':
         valid_size = len(validloader.dataset)
         sample_array = np.linspace(0, valid_size, 100, endpoint=False,dtype=np.int32)
         sample_list = [int(i) for i in sample_array]

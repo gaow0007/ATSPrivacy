@@ -152,7 +152,7 @@ def train_pl(model, loss_fn, trainloader, validloader, defs, setup=dict(dtype=to
     trainer = pl.Trainer(gpus=1,
                     max_epochs=defs.epochs,
                     logger=tb_logger,
-                    val_check_interval=200,
+                    val_check_interval=0.2,
                     log_every_n_steps=50,
                     callbacks=[
                         ModelCheckpoint(

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import torchvision
 import inversefed
-from inversefed.data.data_processing import _build_cifar100, _get_meanstd, _build_imagenet, _build_celeba
+from inversefed.data.data_processing import _build_cifar100, _get_meanstd, _build_imagenet, _build_celeba, _build_celeba_identity
 import torchvision.transforms as transforms
 from torchvision.transforms import (CenterCrop, 
                                     Compose, 
@@ -41,6 +41,8 @@ def create_model(opt):
         model, _ = inversefed.construct_model(arch, num_classes=25, num_channels=3)
     elif opt.data == 'CelebA': #gender classification
         model, _ = inversefed.construct_model(arch, num_classes=2, num_channels=3)
+    elif opt.data == 'CelebA_Identity': #Identity classification
+        model, _ = inversefed.construct_model(arch, num_classes=100, num_channels=3)
     return model
 
 
@@ -128,7 +130,7 @@ def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
     elif opt.data == 'ImageNet':
         #TODO use constant or recompute the mean and std ?
         data_mean, data_std = inversefed.consts.imagenet_mean, inversefed.consts.imagenet_std
-    elif opt.data == 'CelebA':
+    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
         data_mean, data_std = inversefed.consts.celeba_mean, inversefed.consts.celeba_std
     else:
         raise NotImplementedError
@@ -160,7 +162,7 @@ def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
         if len(policy_list) > 0 and mode == 'aug':
             transform_list.append(construct_policy(policy_list))
 
-    elif opt.data == 'CelebA':
+    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
         # transform_list = [transforms.Resize((128, 128))]
         transform_list = [transforms.Resize((112, 112))]
         
@@ -223,7 +225,10 @@ def vit_preprocess(opt, defs, valid=False):
         train_ds = train_ds.select(subset_indices)
 
     train_ds.set_transform(train_transforms)
-    val_ds.set_transform(val_transforms)
+    if valid:
+        val_ds.set_transform(train_transforms)
+    else:
+        val_ds.set_transform(val_transforms)
     trainloader = torch.utils.data.DataLoader(train_ds, collate_fn=collate_fn, batch_size=128, 
             shuffle=True, drop_last=False, num_workers=4, pin_memory=True)
     validloader = torch.utils.data.DataLoader(val_ds, collate_fn=collate_fn, batch_size=256,
@@ -348,8 +353,37 @@ def preprocess(opt, defs, valid=False):
                 shuffle=False, drop_last=True, num_workers=16, pin_memory=True)
 
         return loss_fn, trainloader, validloader
+
+    elif opt.data == 'CelebA_Identity':
+
+        loss_fn, trainloader, validloader =  inversefed.construct_dataloaders('CelebA_Identity', defs)
+        trainset, validset = _build_celeba_identity('~/data/')
+
+        if len(opt.aug_list) > 0:
+            policy_list = split(opt.aug_list)
+        else:
+            policy_list = []
+        if not valid:
+            trainset.transform = build_transform(True, policy_list, opt, defs)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128,
+                    shuffle=True, drop_last=True, num_workers=24, pin_memory=True)
+        if opt.tiny_data:
+            print('Use tiny dataset')
+            defs.validate=10
+        # 10% data sample
+            subset_indices = torch.randperm(len(trainset))[:int(0.1*len(trainset))]
+            trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
+                        drop_last=False, num_workers=16, pin_memory=True, sampler=torch.utils.data.sampler.SubsetRandomSampler(subset_indices))
+
+        if valid:
+            validset.transform = build_transform(True, policy_list, opt, defs)
+        validloader = torch.utils.data.DataLoader(validset, batch_size=128,
+                shuffle=False, drop_last=True, num_workers=16, pin_memory=True)
+
+        return loss_fn, trainloader, validloader
     else:
         raise NotImplementedError
+    
 
 def create_config(opt):
     print(opt.optim)
