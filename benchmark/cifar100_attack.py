@@ -37,6 +37,7 @@ parser.add_argument('--data', default=None, required=True, type=str, help='Visio
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
 parser.add_argument('--resume', default=0, type=int, help='rlabel')
 
+parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use fix ckpt for attack')
 
 parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
 parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')

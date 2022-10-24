@@ -63,9 +63,16 @@ class LitModule(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop. It is independent of forward
-        imgs, labels = batch
-        preds = self.model(imgs)
-        loss = self.loss_fn(preds, labels)
+
+        if isinstance(batch, dict):
+            model_output = self.model(**batch)
+            loss = model_output.loss
+            labels = batch['labels']
+            preds = model_output.logits 
+        else:
+            imgs, labels = batch
+            preds = self.model(imgs)
+            loss = self.loss_fn(preds, labels)
         acc = (preds.argmax(dim=-1) == labels).float().mean()
 
         self.log('train_acc', acc)
@@ -106,9 +113,15 @@ class LitModule(pl.LightningModule):
 
 
     def validation_step(self, batch, batch_idx):
-        imgs, labels = batch
-        preds = self.model(imgs)
-        loss = self.loss_fn(preds, labels)
+        if isinstance(batch, dict):
+            model_output = self.model(**batch)
+            loss = model_output.loss
+            labels = batch['labels']
+            preds = model_output.logits 
+        else:
+            imgs, labels = batch
+            preds = self.model(imgs)
+            loss = self.loss_fn(preds, labels)
         acc = (preds.argmax(dim=-1) == labels).float().mean()
 
         self.log('vaild_acc', acc)
@@ -154,6 +167,7 @@ def train_pl(model, loss_fn, trainloader, validloader, defs, setup=dict(dtype=to
                     logger=tb_logger,
                     val_check_interval=0.2,
                     log_every_n_steps=50,
+                    # log_every_n_steps=10, # for tiny imagenet training
                     callbacks=[
                         ModelCheckpoint(
                             save_top_k = 1,
