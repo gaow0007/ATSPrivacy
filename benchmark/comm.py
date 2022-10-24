@@ -225,7 +225,10 @@ def vit_preprocess(opt, defs, valid=False):
         train_ds = train_ds.select(subset_indices)
 
     train_ds.set_transform(train_transforms)
-    val_ds.set_transform(val_transforms)
+    if valid:
+        val_ds.set_transform(train_transforms)
+    else:
+        val_ds.set_transform(val_transforms)
     trainloader = torch.utils.data.DataLoader(train_ds, collate_fn=collate_fn, batch_size=128, 
             shuffle=True, drop_last=False, num_workers=4, pin_memory=True)
     validloader = torch.utils.data.DataLoader(val_ds, collate_fn=collate_fn, batch_size=256,

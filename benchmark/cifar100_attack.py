@@ -41,6 +41,7 @@ parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use 
 
 parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
 parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
+parser.add_argument('--dryrun', default=False, action='store_true', help='Debug mode')
 opt = parser.parse_args()
 num_images = 1
 
@@ -115,7 +116,7 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     if opt.rlabel:
         output, stats = rec_machine.reconstruct(input_gradient, None, img_shape=shape) # reconstruction label
     else:
-        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape) # specify label
+        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=opt.dryrun) # specify label
         # output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=True) # specify label
 
     output_denormalized = output * ds + dm
@@ -233,7 +234,7 @@ def main():
 
     sample_list = [i for i in range(100)]
 
-    if opt.arch ==  'ResNet20-4' and opt.data == 'ImageNet':
+    if opt.arch ==  'ResNet18_tv' and opt.data == 'ImageNet':
         valid_size = len(validloader.dataset)
         sample_array = np.linspace(0, valid_size, 100, endpoint=False,dtype=np.int32)
         sample_list = [int(i) for i in sample_array]
