@@ -64,16 +64,25 @@ class LitModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # training_step defines the train loop. It is independent of forward
 
-        if isinstance(batch, dict):
-            model_output = self.model(**batch)
-            loss = model_output.loss
-            labels = batch['labels']
-            preds = model_output.logits 
-        else:
+        if isinstance(self.loss_fn, torch.nn.BCEWithLogitsLoss):
             imgs, labels = batch
             preds = self.model(imgs)
             loss = self.loss_fn(preds, labels)
-        acc = (preds.argmax(dim=-1) == labels).float().mean()
+            predicts = torch.sigmoid(preds)
+            predicts = torch.round(predicts) 
+            acc = (predicts == labels).float().mean()
+             
+        else: 
+            if isinstance(batch, dict):
+                model_output = self.model(**batch)
+                loss = model_output.loss
+                labels = batch['labels']
+                preds = model_output.logits 
+            else:
+                imgs, labels = batch
+                preds = self.model(imgs)
+                loss = self.loss_fn(preds, labels)
+            acc = (preds.argmax(dim=-1) == labels).float().mean()
 
         self.log('train_acc', acc)
         self.log('train_loss', loss)
@@ -113,16 +122,25 @@ class LitModule(pl.LightningModule):
 
 
     def validation_step(self, batch, batch_idx):
-        if isinstance(batch, dict):
-            model_output = self.model(**batch)
-            loss = model_output.loss
-            labels = batch['labels']
-            preds = model_output.logits 
-        else:
+
+        if isinstance(self.loss_fn, torch.nn.BCEWithLogitsLoss):
             imgs, labels = batch
             preds = self.model(imgs)
             loss = self.loss_fn(preds, labels)
-        acc = (preds.argmax(dim=-1) == labels).float().mean()
+            predicts = torch.sigmoid(preds)
+            predicts = torch.round(predicts) 
+            acc = (predicts == labels).float().mean()
+        else:
+            if isinstance(batch, dict):
+                model_output = self.model(**batch)
+                loss = model_output.loss
+                labels = batch['labels']
+                preds = model_output.logits 
+            else:
+                imgs, labels = batch
+                preds = self.model(imgs)
+                loss = self.loss_fn(preds, labels)
+            acc = (preds.argmax(dim=-1) == labels).float().mean()
 
         self.log('vaild_acc', acc)
         self.log('vaild_loss', loss)

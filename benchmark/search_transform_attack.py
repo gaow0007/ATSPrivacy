@@ -124,7 +124,7 @@ def accuracy_metric(idx_list, model, loss_fn, trainloader, validloader, label_ke
     elif opt.data == 'ImageNet':
         dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
         ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
-    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+    elif opt.data.startswith('CelebA'):
         dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
         ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
         
@@ -176,7 +176,7 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, label_key='fine_l
     elif opt.data == 'ImageNet':
         dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
         ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
-    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+    elif opt.data.startswith('CelebA'):
         dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
         ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
     else:
@@ -280,10 +280,14 @@ def main():
         num_classes = 10
     elif opt.data == 'ImageNet':
         num_classes = 25
-    elif opt.data == 'CelebA':
+    elif opt.data in ['CelebA_Gender', 'CelebA_Smile']:
         num_classes = 2
     elif opt.data == 'CelebA_Identity':
         num_classes = 100
+    elif opt.data == 'CelebA_MLabel':
+        num_classes = 40
+    elif opt.data == 'CelebAFaceAlign_MLabel':
+        num_classes = 40
     for i in range(num_classes):
         sample_list[i] = []
     if opt.arch not in ['vit']:
