@@ -113,6 +113,9 @@ def construct_model(model, num_classes=10, seed=None, num_channels=3, modelkey=N
         model = ResNet(torchvision.models.resnet.BasicBlock, [18, 18, 18], num_classes=num_classes, base_width=16)
     elif model == 'ResNet18':
         model = ResNet(torchvision.models.resnet.BasicBlock, [2, 2, 2, 2], num_classes=num_classes, base_width=64)
+    elif model == 'ResNet18_tv':
+        model = torchvision.models.resnet18()
+        model.fc = nn.Linear(512, num_classes)
     elif model == 'ResNet34':
         model = ResNet(torchvision.models.resnet.BasicBlock, [3, 4, 6, 3], num_classes=num_classes, base_width=64)
     elif model == 'ResNet50':

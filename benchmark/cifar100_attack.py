@@ -37,6 +37,13 @@ parser.add_argument('--data', default=None, required=True, type=str, help='Visio
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
 parser.add_argument('--resume', default=0, type=int, help='rlabel')
 
+parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use fix ckpt for attack')
+
+parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
+parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
+parser.add_argument('--dryrun', default=False, action='store_true', help='Debug mode')
+parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use fix ckpt for attack')
+
 opt = parser.parse_args()
 num_images = 1
 
@@ -60,6 +67,9 @@ def collate_fn(examples, label_key='fine_label'):
     return {"pixel_values": pixel_values, "labels": labels}
 
 def create_save_dir():
+    if opt.fix_ckpt:
+        return 'benchmark/images/data_{}_arch_{}_epoch_{}_optim_{}_mode_{}_auglist_{}_rlabel_{}_fix'.format(opt.data, opt.arch, opt.epochs, opt.optim, opt.mode, \
+            opt.aug_list, opt.rlabel)
     return 'benchmark/images/data_{}_arch_{}_epoch_{}_optim_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.epochs, opt.optim, opt.mode, \
         opt.aug_list, opt.rlabel)
 
@@ -108,7 +118,8 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     if opt.rlabel:
         output, stats = rec_machine.reconstruct(input_gradient, None, img_shape=shape) # reconstruction label
     else:
-        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape) # specify label
+        output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=opt.dryrun) # specify label
+        # output, stats = rec_machine.reconstruct(input_gradient, labels, img_shape=shape, dryrun=True) # specify label
 
     output_denormalized = output * ds + dm
     input_denormalized = ground_truth * ds + dm
@@ -119,8 +130,8 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    torchvision.utils.save_image(output_denormalized.cpu().clone(), '{}/rec_{}.jpg'.format(save_dir, idx))
-    torchvision.utils.save_image(input_denormalized.cpu().clone(), '{}/ori_{}.jpg'.format(save_dir, idx))
+    torchvision.utils.save_image(output_denormalized.cpu().clone(), '{}/rec_{}.png'.format(save_dir, idx))
+    torchvision.utils.save_image(input_denormalized.cpu().clone(), '{}/ori_{}.png'.format(save_dir, idx))
 
 
     test_mse = (output_denormalized.detach() - input_denormalized).pow(2).mean().cpu().detach().numpy()
@@ -132,7 +143,7 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
     test_psnr = inversefed.metrics.psnr(output_denormalized, input_denormalized)
 
     return {'test_mse': test_mse,
-        'feat_mse': feat_mse,
+        'feat_mse': feat_mse.detach(), # if not, the computation graph would store in list for each iteration, case OOM error. https://discuss.pytorch.org/t/memory-leak-when-appending-tensors-to-a-list/25937 If you store something from your model (for debugging purpose) and don’t need to calculate gradients with it anymore, I would recommend to call detach on it as it won’t have any effects if the tensor is already detached.
         'test_psnr': test_psnr
     }
 
@@ -140,6 +151,8 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
 
 
 def create_checkpoint_dir():
+    if opt.fix_ckpt:
+        return 'checkpoints/data_{}_arch_{}_mode_crop_auglist__rlabel_{}'.format(opt.data, opt.arch, opt.rlabel)
     return 'checkpoints/data_{}_arch_{}_mode_{}_auglist_{}_rlabel_{}'.format(opt.data, opt.arch, opt.mode, opt.aug_list, opt.rlabel)
 
 
@@ -148,7 +161,7 @@ def main():
     print(opt)
 
     if opt.arch not in ['vit']: 
-        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=False)
+        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
         model = create_model(opt)
         if opt.data == 'cifar100':
             dm = torch.as_tensor(inversefed.consts.cifar10_mean, **setup)[:, None, None]
@@ -158,10 +171,20 @@ def main():
             dm = torch.Tensor([0.1307]).view(1, 1, 1).cuda()
             ds = torch.Tensor([0.3081]).view(1, 1, 1).cuda()
             shape = (1, 32, 32)
+        elif opt.data == 'ImageNet':
+            dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
+            ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
+            shape = (3, 224, 224)
+        elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+            dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
+            ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
+            # shape = (3, 128, 128)
+            shape = (3, 112, 112)
+        
         else:
             raise NotImplementedError
     else: 
-        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=False) # batch size rescale to 16
+        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=True) # batch size rescale to 16
         dm, ds = mean_std
         if opt.data == 'cifar100':
             dm = torch.as_tensor(dm, **setup)[:, None, None]
@@ -173,12 +196,6 @@ def main():
             shape = (1, scale_size, scale_size)
 
     label_key = 'fine_label' if opt.data == 'cifar100' else 'label'
-    model.to(**setup)
-    if opt.epochs == 0:
-        trained_model = False
-        
-    if trained_model:
-        checkpoint_dir = create_checkpoint_dir()
 
     # loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
     # model = create_model(opt)
@@ -190,7 +207,8 @@ def main():
         checkpoint_dir = create_checkpoint_dir()
         if 'normal' in checkpoint_dir:
             checkpoint_dir = checkpoint_dir.replace('normal', 'crop')
-        filename = os.path.join(checkpoint_dir, str(defs.epochs) + '.pth')
+        filename = os.path.join(checkpoint_dir, f'{opt.arch}_{defs.epochs}.pth')
+        # filename = os.path.join(checkpoint_dir, str(defs.epochs) + '.pth')
 
         if not os.path.exists(filename):
             filename = os.path.join(checkpoint_dir, str(defs.epochs - 1) + '.pth')
@@ -205,8 +223,25 @@ def main():
                 param.requires_grad = False
 
     model.eval()
-    sample_list = [i for i in range(100)]
+
+    save_dir = create_save_dir()
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     metric_list = list()
+    #resume
+    metric_path = save_dir + '/metric.npy'
+    if os.path.exists(metric_path):
+        metric_list = np.load(metric_path, allow_pickle=True).tolist()
+
+    sample_list = [i for i in range(100)]
+
+    if opt.arch ==  'ResNet18_tv' and opt.data == 'ImageNet':
+        valid_size = len(validloader.dataset)
+        sample_array = np.linspace(0, valid_size, 100, endpoint=False,dtype=np.int32)
+        sample_list = [int(i) for i in sample_array]
+
+        # sample_list = [25] #debug
+        
     mse_loss = 0
     for attack_id, idx in enumerate(sample_list):
         if idx < opt.resume:
@@ -214,8 +249,8 @@ def main():
         print('attach {}th in {}'.format(idx, opt.aug_list))
         metric = reconstruct(idx, model, loss_fn, trainloader, validloader, (dm, ds), shape, label_key)
         metric_list.append(metric)
-    save_dir = create_save_dir()
-    np.save('{}/metric.npy'.format(save_dir), metric_list)
+        #save metric after each reconstruction
+        np.save('{}/metric.npy'.format(save_dir), metric_list)
 
 
 

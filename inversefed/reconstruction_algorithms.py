@@ -1,5 +1,6 @@
 """Mechanisms for image reconstruction from parameter gradients."""
 
+from cmath import isinf
 import torch
 from collections import defaultdict, OrderedDict
 from inversefed.nn import MetaMonkey
@@ -376,10 +377,13 @@ def reconstruction_costs(gradients, input_gradient, cost_fn='l2', indices='def',
         for i in indices:
             if cost_fn == 'l2':
                 costs += ((trial_gradient[i] - input_gradient[i]).pow(2)).sum() * weights[i]
+                cnt = 1
             elif cost_fn == 'l1':
                 costs += ((trial_gradient[i] - input_gradient[i]).abs()).sum() * weights[i]
+                cnt = 1
             elif cost_fn == 'max':
                 costs += ((trial_gradient[i] - input_gradient[i]).abs()).max() * weights[i]
+                cnt = 1
             elif cost_fn == 'sim':
                 costs -= (trial_gradient[i] * input_gradient[i]).sum() * weights[i]
                 pnorm[0] += trial_gradient[i].pow(2).sum() * weights[i]
@@ -403,8 +407,18 @@ def reconstruction_costs(gradients, input_gradient, cost_fn='l2', indices='def',
                                                                    input_gradient[i].flatten(),
                                                                    0, 1e-10) * weights[i]
         if cost_fn == 'sim':
-            costs = 1 + costs / pnorm[0].sqrt() / pnorm[1].sqrt()
+            # costs = 1 + costs / pnorm[0].sqrt() / pnorm[1].sqrt()
+            norm = max(pnorm[0].sqrt() * pnorm[1].sqrt(), torch.tensor(1e-8, device=pnorm[0].device))
+            costs = 1 + costs / norm
         # Accumulate final costs
         total_costs += costs / cnt
-
+    # print(type(gradients), len(gradients), type(gradients[0]), type(total_costs))
+    if torch.isinf(total_costs):
+        print('inf', cost_fn, costs, cnt)
+        exit(0)
+    if torch.isnan(total_costs):
+        print('nan', cost_fn, costs, cnt)
+        exit(0)
+    # exit(0)
+    
     return total_costs / len(gradients)

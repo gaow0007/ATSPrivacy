@@ -10,13 +10,14 @@ from .scheduler import GradualWarmupScheduler
 from .. import consts
 from ..consts import BENCHMARK, NON_BLOCKING
 torch.backends.cudnn.benchmark = BENCHMARK
+from tqdm import tqdm
 
 def train(model, loss_fn, trainloader, validloader, defs, setup=dict(dtype=torch.float, device=torch.device('cpu')), save_dir=None):
     """Run the main interface. Train a network with specifications from the Strategy object."""
     stats = defaultdict(list)
     optimizer, scheduler = set_optimizer(model, defs)
     print('starting to training model')
-    for epoch in range(defs.epochs):
+    for epoch in tqdm(range(defs.epochs)):
         model.train()
         step(model, loss_fn, trainloader, optimizer, scheduler, defs, setup, stats)
 
@@ -44,8 +45,8 @@ def step(model, loss_fn, dataloader, optimizer, scheduler, defs, setup, stats):
 
     epoch_loss, epoch_metric = 0, 0
     for batch, data_info in enumerate(dataloader):
-        if batch % 10 == 0: 
-            print('run [{}/{}]'.format(batch, len(dataloader)))
+        # if batch % 10 == 0: 
+        #     print('run [{}/{}]'.format(batch, len(dataloader)))
         # Prep Mini-Batch
         optimizer.zero_grad()
         # Transfer to GPU
@@ -63,7 +64,7 @@ def step(model, loss_fn, dataloader, optimizer, scheduler, defs, setup, stats):
             targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
             # Get loss
             outputs = model(inputs)
-            loss, _, _ = loss_fn(outputs, targets)
+            loss = loss_fn(outputs, targets)
 
 
         epoch_loss += loss.item()
@@ -105,7 +106,7 @@ def validate(model, loss_fn, dataloader, defs, setup, stats):
                 targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
                 # Get loss
                 outputs = model(inputs)
-                loss, _, _ = loss_fn(outputs, targets)
+                loss = loss_fn(outputs, targets)
             
             metric, name, _ = loss_fn.metric(outputs, targets)
 
@@ -124,6 +125,7 @@ def set_optimizer(model, defs):
     The linear scheduler drops the learning rate in intervals.
     # Example: epochs=160 leads to drops at 60, 100, 140.
     """
+    print(f'Learning rate {defs.lr}')
     if defs.optimizer == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr=defs.lr, momentum=0.9,
                                     weight_decay=defs.weight_decay, nesterov=True)
@@ -196,7 +198,7 @@ def step_with_defense(model, loss_fn, dataloader, optimizer, scheduler, defs, se
         targets = targets.to(device=setup['device'], non_blocking=NON_BLOCKING)
         # Get loss
         outputs = model(inputs)
-        loss, _, _ = loss_fn(outputs, targets)
+        loss = loss_fn(outputs, targets)
 
         epoch_loss += loss.item()
         loss.backward()

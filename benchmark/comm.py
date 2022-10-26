@@ -1,10 +1,12 @@
+import imp
 import os, sys
+from random import random, shuffle
 sys.path.insert(0, './')
 import torch
 import numpy as np
 import torchvision
 import inversefed
-from inversefed.data.data_processing import _build_cifar100, _get_meanstd
+from inversefed.data.data_processing import _build_cifar100, _get_meanstd, _build_imagenet, _build_celeba, _build_celeba_identity
 import torchvision.transforms as transforms
 from torchvision.transforms import (CenterCrop, 
                                     Compose, 
@@ -24,6 +26,8 @@ import policy
 from datasets import load_dataset
 from transformers import ViTForImageClassification
 from transformers import ViTFeatureExtractor
+import random
+from pathlib import Path
 
 
 policies = policy.policies
@@ -35,6 +39,12 @@ def create_model(opt):
         model, _ = inversefed.construct_model(arch, num_classes=100, num_channels=3)
     elif opt.data == 'FashionMinist':
         model, _ = inversefed.construct_model(arch, num_classes=10, num_channels=1)
+    elif opt.data == 'ImageNet':
+        model, _ = inversefed.construct_model(arch, num_classes=25, num_channels=3)
+    elif opt.data == 'CelebA': #gender classification
+        model, _ = inversefed.construct_model(arch, num_classes=2, num_channels=3)
+    elif opt.data == 'CelebA_Identity': #Identity classification
+        model, _ = inversefed.construct_model(arch, num_classes=100, num_channels=3)
     return model
 
 
@@ -89,7 +99,7 @@ def build_vit_transform(normalize=True, policy_list=list(), opt=None, defs=None,
                             transforms.RandomHorizontalFlip()]
         transform_list.append(construct_policy(policy_list))
 
-    transform_list.extend([ToTensor, normalize])
+    transform_list.extend([ToTensor(), normalize])
     _train_transforms = Compose(
             transform_list
         )
@@ -119,6 +129,11 @@ def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
         data_mean, data_std = inversefed.consts.cifar10_mean, inversefed.consts.cifar10_std
     elif opt.data == 'FashionMinist':
         data_mean, data_std  = (0.1307,), (0.3081,)
+    elif opt.data == 'ImageNet':
+        #TODO use constant or recompute the mean and std ?
+        data_mean, data_std = inversefed.consts.imagenet_mean, inversefed.consts.imagenet_std
+    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+        data_mean, data_std = inversefed.consts.celeba_mean, inversefed.consts.celeba_std
     else:
         raise NotImplementedError
 
@@ -142,7 +157,19 @@ def build_transform(normalize=True, policy_list=list(), opt=None, defs=None):
         transform_list.append(lambda x: transforms.functional.to_grayscale(x, num_output_channels=1))
         transform_list.append(transforms.Resize(32))
 
+    elif opt.data == 'ImageNet':
+        transform_list = [transforms.Resize(256),
+                            transforms.CenterCrop(224)]
+        
+        if len(policy_list) > 0 and mode == 'aug':
+            transform_list.append(construct_policy(policy_list))
 
+    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+        # transform_list = [transforms.Resize((128, 128))]
+        transform_list = [transforms.Resize((112, 112))]
+        
+        if len(policy_list) > 0 and mode == 'aug':
+            transform_list.append(construct_policy(policy_list))
     print(transform_list)
 
 
@@ -185,15 +212,25 @@ def vit_preprocess(opt, defs, valid=False):
         policy_list = split(opt.aug_list)
     else:
         policy_list = []
-    
-    pretrain_path = 'google/vit-base-patch16-224-in21k' if not os.path.exists('/root/.cache/huggingface/transformers/vit-base-patch16-224-in21k') else '/root/.cache/huggingface/transformers/vit-base-patch16-224-in21k'
+    home = Path.home().as_posix() 
+    pretrain_path = 'google/vit-base-patch16-224-in21k' if not os.path.exists(home + '/.cache/huggingface/transformers/vit-base-patch16-224-in21k') else home + '/.cache/huggingface/transformers/vit-base-patch16-224-in21k'
     feature_extractor = ViTFeatureExtractor.from_pretrained(pretrain_path)
     mean, std =feature_extractor.image_mean, feature_extractor.image_std
     scale_size = feature_extractor.size 
 
     train_transforms, val_transforms = build_vit_transform(True, policy_list, opt, defs, (mean,std), scale_size)
+    if opt.tiny_data:
+    # 10% data sample
+        indices = [i for i in range(len(train_ds))]
+        random.shuffle(indices)
+        subset_indices = indices[:int(0.1*len(train_ds))] 
+        train_ds = train_ds.select(subset_indices)
+
     train_ds.set_transform(train_transforms)
-    val_ds.set_transform(val_transforms)
+    if valid:
+        val_ds.set_transform(train_transforms)
+    else:
+        val_ds.set_transform(val_transforms)
     trainloader = torch.utils.data.DataLoader(train_ds, collate_fn=collate_fn, batch_size=128, 
             shuffle=True, drop_last=False, num_workers=4, pin_memory=True)
     validloader = torch.utils.data.DataLoader(val_ds, collate_fn=collate_fn, batch_size=256,
@@ -262,10 +299,93 @@ def preprocess(opt, defs, valid=False):
                 shuffle=False, drop_last=False, num_workers=4, pin_memory=True)
 
         return loss_fn, trainloader, validloader
+
+    elif opt.data == 'ImageNet':
+
+        loss_fn, trainloader, validloader =  inversefed.construct_dataloaders('ImageNet', defs)
+        trainset, validset = _build_imagenet('~/data/')
+
+        if len(opt.aug_list) > 0:
+            policy_list = split(opt.aug_list)
+        else:
+            policy_list = []
+        if not valid:
+            trainset.transform = build_transform(True, policy_list, opt, defs)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
+                    shuffle=True, drop_last=True, num_workers=24, pin_memory=True)
+        if opt.tiny_data:
+            print('Use tiny dataset')
+            defs.validate=1
+        # 10% data sample
+            subset_indices = torch.randperm(len(trainset))[:int(0.1*len(trainset))]
+            trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
+                        drop_last=False, num_workers=16, pin_memory=True, sampler=torch.utils.data.sampler.SubsetRandomSampler(subset_indices))
+
+        if valid:
+            validset.transform = build_transform(True, policy_list, opt, defs)
+        validloader = torch.utils.data.DataLoader(validset, batch_size=64,
+                shuffle=False, drop_last=True, num_workers=16, pin_memory=True)
+
+        return loss_fn, trainloader, validloader
+
+    elif opt.data == 'CelebA':
+
+        loss_fn, trainloader, validloader =  inversefed.construct_dataloaders('CelebA', defs)
+        trainset, validset = _build_celeba('~/data/')
+
+        if len(opt.aug_list) > 0:
+            policy_list = split(opt.aug_list)
+        else:
+            policy_list = []
+        if not valid:
+            trainset.transform = build_transform(True, policy_list, opt, defs)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128,
+                    shuffle=True, drop_last=True, num_workers=24, pin_memory=True)
+        if opt.tiny_data:
+            print('Use tiny dataset')
+            defs.validate=10
+        # 10% data sample
+            subset_indices = torch.randperm(len(trainset))[:int(0.1*len(trainset))]
+            trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
+                        drop_last=False, num_workers=16, pin_memory=True, sampler=torch.utils.data.sampler.SubsetRandomSampler(subset_indices))
+
+        if valid:
+            validset.transform = build_transform(True, policy_list, opt, defs)
+        validloader = torch.utils.data.DataLoader(validset, batch_size=128,
+                shuffle=False, drop_last=True, num_workers=16, pin_memory=True)
+
+        return loss_fn, trainloader, validloader
+
+    elif opt.data == 'CelebA_Identity':
+
+        loss_fn, trainloader, validloader =  inversefed.construct_dataloaders('CelebA_Identity', defs)
+        trainset, validset = _build_celeba_identity('~/data/')
+
+        if len(opt.aug_list) > 0:
+            policy_list = split(opt.aug_list)
+        else:
+            policy_list = []
+        if not valid:
+            trainset.transform = build_transform(True, policy_list, opt, defs)
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=128,
+                    shuffle=True, drop_last=True, num_workers=24, pin_memory=True)
+        if opt.tiny_data:
+            print('Use tiny dataset')
+            defs.validate=10
+        # 10% data sample
+            subset_indices = torch.randperm(len(trainset))[:int(0.1*len(trainset))]
+            trainloader = torch.utils.data.DataLoader(trainset, batch_size=64,
+                        drop_last=False, num_workers=16, pin_memory=True, sampler=torch.utils.data.sampler.SubsetRandomSampler(subset_indices))
+
+        if valid:
+            validset.transform = build_transform(True, policy_list, opt, defs)
+        validloader = torch.utils.data.DataLoader(validset, batch_size=128,
+                shuffle=False, drop_last=True, num_workers=16, pin_memory=True)
+
+        return loss_fn, trainloader, validloader
     else:
         raise NotImplementedError
-
-
+    
 
 def create_config(opt):
     print(opt.optim)
@@ -278,6 +398,7 @@ def create_config(opt):
                 lr=0.1,
                 optim='adam',
                 restarts=1,
+                # max_iterations=100, #debug
                 max_iterations=4800,
                 total_variation=1e-4,
                 init='randn',
@@ -394,6 +515,22 @@ def create_config(opt):
         torch.cuda.manual_seed(seed)
         import random
         random.seed(seed)
+    elif opt.optim == 'inversed_large':
+        config = dict(signed=True,
+                boxed=True,
+                cost_fn='sim',
+                indices='def',
+                weights='equal',
+                lr=0.1,
+                optim='adam',
+                restarts=1,
+                # max_iterations=100, #debug
+                max_iterations=4800,
+                total_variation=1e-1,
+                init='randn',
+                filter='none',
+                lr_decay=True,
+                scoring_choice='loss')
     else:
         raise NotImplementedError
     return config

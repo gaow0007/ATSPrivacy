@@ -18,9 +18,11 @@ import argparse
 from autoaugment import SubPolicy
 from inversefed.data.data_processing import _build_cifar100, _get_meanstd
 import torch.nn.functional as F
-from benchmark.comm import create_model, build_transform, preprocess, create_config
+from benchmark.comm import create_model, build_transform, preprocess, create_config, vit_preprocess
 import policy
 import copy
+from transformers import ViTFeatureExtractor, ViTForImageClassification
+from functools import partial
 
 policies = policy.policies
 
@@ -32,6 +34,8 @@ parser.add_argument('--arch', default=None, required=True, type=str, help='Visio
 parser.add_argument('--data', default=None, required=True, type=str, help='Vision dataset.')
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
 parser.add_argument('--num_samples', default=5, type=int, help='Images per class')
+
+parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
 opt = parser.parse_args()
 
 
@@ -67,6 +71,11 @@ def similarity_measures(img_batch, ref_batch, batched=True, method='fsim'):
         sim = np.mean(sim_list)
     return sim
 
+def collate_fn(examples, label_key='fine_label'):
+    pixel_values = torch.stack([example["pixel_values"] for example in examples])
+    labels = torch.tensor([example[label_key] for example in examples])
+    return {"pixel_values": pixel_values, "labels": labels}
+
 def eval_score(jacob, labels=None):
     corrs = np.corrcoef(jacob)
     v, _  = np.linalg.eig(corrs)
@@ -79,13 +88,15 @@ def get_batch_jacobian(net, x, target):
     net.zero_grad()
     x.requires_grad_(True)
     y = net(x)
+    if isinstance(y, tuple):
+        y = y[0] # vit model return  (logit)
     y.backward(torch.ones_like(y))
     jacob = x.grad.detach()
     return jacob, target.detach()
 
 def calculate_dw(model, inputs, labels, loss_fn):
     model.zero_grad()
-    target_loss, _, _ = loss_fn(model(inputs), labels)
+    target_loss = loss_fn(model(inputs), labels)
     dw = torch.autograd.grad(target_loss, model.parameters())
     return dw
 
@@ -103,26 +114,50 @@ def cal_dis(a, b, metric='L2'):
 
 
 
-def accuracy_metric(idx_list, model, loss_fn, trainloader, validloader):
+def accuracy_metric(idx_list, model, loss_fn, trainloader, validloader, label_key='fine_label'):
     if opt.data == 'cifar100':
         dm = torch.as_tensor(inversefed.consts.cifar10_mean, **setup)[:, None, None]
         ds = torch.as_tensor(inversefed.consts.cifar10_std, **setup)[:, None, None]
     elif opt.data == 'FashionMinist':
         dm = torch.Tensor([0.1307]).view(1, 1, 1).cuda()
         ds = torch.Tensor([0.3081]).view(1, 1, 1).cuda()
+    elif opt.data == 'ImageNet':
+        dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
+        ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
+    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+        dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
+        ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
+        
     else:
         raise NotImplementedError
 
     # prepare data
     ground_truth, labels = [], []
-    for idx in idx_list:
-        img, label = validloader.dataset[idx]
-        idx += 1
-        if label not in labels:
-            labels.append(torch.as_tensor((label,), device=setup['device']))
-            ground_truth.append(img.to(**setup))
 
-    ground_truth = torch.stack(ground_truth)
+    if isinstance(model, ViTForImageClassification):
+        #return tuple(logits,) instead of ModelOutput object
+        model.forward = partial(model.forward, return_dict=False)
+        for idx in idx_list:
+            example = validloader.dataset[idx]
+            label = example[label_key]
+
+            idx += 1
+            if label not in labels:
+                labels.append(torch.as_tensor((label,), device=setup['device']))
+                ground_truth.append(example)
+        
+        ground_truth = collate_fn(ground_truth, label_key=label_key)['pixel_values'].to(**setup)
+
+    else: 
+        for idx in idx_list:
+            img, label = validloader.dataset[idx]
+            idx += 1
+            if label not in labels:
+                labels.append(torch.as_tensor((label,), device=setup['device']))
+                ground_truth.append(img.to(**setup))
+
+        ground_truth = torch.stack(ground_truth)
+        
     labels = torch.cat(labels)
     model.zero_grad()
     jacobs, labels= get_batch_jacobian(model, ground_truth, labels)
@@ -131,30 +166,59 @@ def accuracy_metric(idx_list, model, loss_fn, trainloader, validloader):
 
 
 
-def reconstruct(idx, model, loss_fn, trainloader, validloader):
+def reconstruct(idx, model, loss_fn, trainloader, validloader, label_key='fine_label'):
     if opt.data == 'cifar100':
         dm = torch.as_tensor(inversefed.consts.cifar10_mean, **setup)[:, None, None]
         ds = torch.as_tensor(inversefed.consts.cifar10_std, **setup)[:, None, None]
     elif opt.data == 'FashionMinist':
         dm = torch.Tensor([0.1307]).view(1, 1, 1).cuda()
         ds = torch.Tensor([0.3081]).view(1, 1, 1).cuda()
+    elif opt.data == 'ImageNet':
+        dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
+        ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
+    elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+        dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
+        ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
     else:
         raise NotImplementedError
     
     # prepare data
     ground_truth, labels = [], []
-    while len(labels) < num_images:
-        img, label = validloader.dataset[idx]
-        idx += 1
-        if label not in labels:
-            labels.append(torch.as_tensor((label,), device=setup['device']))
-            ground_truth.append(img.to(**setup))
+    if isinstance(model, ViTForImageClassification):
+        #return tuple(logits,) instead of ModelOutput object
+        model.forward = partial(model.forward, return_dict=False)
+        while len(labels) < num_images:
+            example = validloader.dataset[idx]
+            label = example[label_key]
 
-    ground_truth = torch.stack(ground_truth)
+            idx += 1
+            if label not in labels:
+                labels.append(torch.as_tensor((label,), device=setup['device']))
+                ground_truth.append(example)
+        
+        ground_truth = collate_fn(ground_truth, label_key=label_key)['pixel_values'].to(**setup)
+
+    else: 
+        while len(labels) < num_images:
+            img, label = validloader.dataset[idx]
+            idx += 1
+            if label not in labels:
+                labels.append(torch.as_tensor((label,), device=setup['device']))
+                ground_truth.append(img.to(**setup))
+
+        ground_truth = torch.stack(ground_truth)
+
+    # while len(labels) < num_images:
+    #     img, label = validloader.dataset[idx]
+    #     idx += 1
+    #     if label not in labels:
+    #         labels.append(torch.as_tensor((label,), device=setup['device']))
+    #         ground_truth.append(img.to(**setup))
+
     labels = torch.cat(labels)
     model.zero_grad()
     # calcuate ori dW
-    target_loss, _, _ = loss_fn(model(ground_truth), labels)
+    target_loss = loss_fn(model(ground_truth), labels)
     input_gradient = torch.autograd.grad(target_loss, model.parameters())
 
     metric = 'cos'
@@ -190,8 +254,11 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader):
 
 
 def main():
-    loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
-    model = create_model(opt)
+    if opt.arch not in ['vit']:
+        loss_fn, trainloader, validloader = preprocess(opt, defs, valid=True)
+        model = create_model(opt)
+    else:
+        loss_fn, trainloader, validloader, model, mean_std, scale_size = vit_preprocess(opt, defs, valid=True) # batch size rescale to 16
     model.to(**setup)
     old_state_dict = copy.deepcopy(model.state_dict())
     model.load_state_dict(torch.load('checkpoints/tiny_data_{}_arch_{}/{}.pth'.format(opt.data, opt.arch, opt.epochs)))
@@ -206,22 +273,35 @@ def main():
     compute_acc_score = True
 
     sample_list = {}
+    label_key = 'fine_label' if opt.data == 'cifar100' else 'label'
     if opt.data == 'cifar100':
         num_classes = 100
     elif opt.data == 'FashionMinist':
         num_classes = 10
+    elif opt.data == 'ImageNet':
+        num_classes = 25
+    elif opt.data == 'CelebA':
+        num_classes = 2
+    elif opt.data == 'CelebA_Identity':
+        num_classes = 100
     for i in range(num_classes):
         sample_list[i] = []
-    for idx, (_, label) in enumerate(validloader.dataset):   
-        sample_list[label].append(idx)
+    if opt.arch not in ['vit']:
+        for idx, (_, label) in enumerate(validloader.dataset):   
+            if isinstance(label, torch.Tensor):
+                label = label.item()
+            sample_list[label].append(idx)
+    else:
+        for idx, sample in enumerate(validloader.dataset):   
+            sample_list[sample[label_key]].append(idx)
 
     if compute_privacy_score:
         num_samples = opt.num_samples
         for label in range(num_classes):
             metric = []
             for idx in range(num_samples):
-                metric.append(reconstruct(sample_list[label][idx], model, loss_fn, trainloader, validloader))
-                print('attach {}th in class {}, auglist:{} metric {}'.format(idx, label, opt.aug_list, metric))
+                metric.append(reconstruct(sample_list[label][idx], model, loss_fn, trainloader, validloader, label_key))
+                # print('attach {}th in class {}, auglist:{} metric {}'.format(idx, label, opt.aug_list, metric))
             metric_list.append(np.mean(metric,axis=0))
 
         pathname = 'search/data_{}_arch_{}/{}'.format(opt.data, opt.arch, opt.aug_list)
@@ -237,7 +317,7 @@ def main():
         score_list = list()
         for run in range(10):
             large_samle_list = [200 + run  * 100 + i for i in range(100)]
-            score = accuracy_metric(large_samle_list, model, loss_fn, trainloader, validloader)
+            score = accuracy_metric(large_samle_list, model, loss_fn, trainloader, validloader, label_key)
             score_list.append(score)
     
         print('time cost ', time.time() - start)

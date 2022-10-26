@@ -9,6 +9,8 @@ def training_strategy(strategy, lr=None, epochs=None, dryrun=False):
         defs = ConservativeStrategy(lr, epochs, dryrun)
     elif strategy == 'adam':
         defs = AdamStrategy(lr, epochs, dryrun)
+    elif strategy == 'vitadam':
+        defs = ViTAdamStrategy(lr, epochs, dryrun)
     else:
         raise ValueError('Unknown training strategy.')
     return defs
@@ -68,6 +70,25 @@ class AdamStrategy(Strategy):
         self.lr = 1e-3 / 10
         self.epochs = 120
         self.batch_size = 32
+        self.optimizer = 'AdamW'
+        self.scheduler = 'linear'
+        self.warmup = True
+        self.weight_decay : float = 5e-4
+        self.dropout = 0.0
+        self.augmentations = True
+        self.dryrun = False
+        super().__init__(lr=None, epochs=None, dryrun=False)
+
+
+@dataclass
+class ViTAdamStrategy(Strategy):
+    """Start slowly. Use a tame Adam."""
+
+    def __init__(self, lr=None, epochs=None, dryrun=False):
+        """Initialize training hyperparameters."""
+        self.lr = 0.0001
+        self.epochs = 120
+        self.batch_size = 64
         self.optimizer = 'AdamW'
         self.scheduler = 'linear'
         self.warmup = True
