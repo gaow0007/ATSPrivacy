@@ -37,8 +37,6 @@ parser.add_argument('--data', default=None, required=True, type=str, help='Visio
 parser.add_argument('--epochs', default=None, required=True, type=int, help='Vision epoch.')
 parser.add_argument('--resume', default=0, type=int, help='rlabel')
 
-parser.add_argument('--fix_ckpt', default=False, action='store_true', help='Use fix ckpt for attack')
-
 parser.add_argument('--defense', default=None, type=str, help='Existing Defenses')
 parser.add_argument('--tiny_data', default=False, action='store_true', help='Use 0.1 training dataset')
 parser.add_argument('--dryrun', default=False, action='store_true', help='Debug mode')
@@ -98,7 +96,11 @@ def reconstruct(idx, model, loss_fn, trainloader, validloader, mean_std, shape, 
             img, label = validloader.dataset[idx]
             idx += 1
             if label not in labels:
-                labels.append(torch.as_tensor((label,), device=setup['device']))
+                # print(label, type(label))
+                if isinstance(label, torch.Tensor):
+                    labels.append(label.to(device=setup['device']).unsqueeze(0))
+                else:
+                    labels.append(torch.as_tensor((label,), device=setup['device']))
                 ground_truth.append(img.to(**setup))
 
         ground_truth = torch.stack(ground_truth)
@@ -175,7 +177,7 @@ def main():
             dm = torch.as_tensor(inversefed.consts.imagenet_mean, **setup)[:, None, None]
             ds = torch.as_tensor(inversefed.consts.imagenet_std, **setup)[:, None, None]
             shape = (3, 224, 224)
-        elif opt.data == 'CelebA' or opt.data == 'CelebA_Identity':
+        elif opt.data.startswith('CelebA'):
             dm = torch.as_tensor(inversefed.consts.celeba_mean, **setup)[:, None, None]
             ds = torch.as_tensor(inversefed.consts.celeba_std, **setup)[:, None, None]
             # shape = (3, 128, 128)
