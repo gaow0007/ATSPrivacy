@@ -14,6 +14,28 @@ which can be found at https://arxiv.org/abs/2011.12505
 Collaborative learning has gained great popularity due to its benefit of data privacy protection: participants can jointly train a Deep Learning model without sharing their training sets. However, recent works discovered that an adversary can fully recover the sensitive training samples from the shared gradients. Such reconstruction attacks pose severe threats to collaborative learning. Hence, effective mitigation solutions are urgently desired.
 In this paper, we propose to leverage data augmentation to defeat reconstruction attacks: by preprocessing sensitive images with carefully-selected transformation policies, it becomes infeasible for the adversary to extract any useful information from the corresponding gradients. We design a novel search method to automatically discover qualified policies. We adopt two new metrics to quantify the impacts of transformations on data privacy and model usability, which can significantly accelerate the search speed. Comprehensive evaluations demonstrate that the policies discovered by our method can defeat existing reconstruction attacks in collaborative learning, with high efficiency and negligible impact on the model performance.
 
+
+## Citation 
+If you use this code or survey in your research, please cite this project.
+```
+@inproceedings{gao2021privacy,
+  title={Privacy-preserving collaborative learning with automatic transformation search},
+  author={Gao, Wei and Guo, Shangwei and Zhang, Tianwei and Qiu, Han and Wen, Yonggang and Liu, Yang},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={114--123},
+  year={2021}
+}
+
+@article{gao2023automatic,
+  title={Automatic Transformation Search Against Deep Leakage from Gradients},
+  author={Gao, Wei and Zhang, Xu and Guo, Shangwei and Zhang, Tianwei and Xiang, Tao and Qiu, Han and Wen, Yonggang and Liu, Yang},
+  journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  year={2023},
+  publisher={IEEE}
+}
+```
+
+
 ## Code
 The search algorithm file that contains  can be found at ```searchalg/```. The other important experimental part can be found at ```benchmark/```.
 
