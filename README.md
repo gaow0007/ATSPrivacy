@@ -16,7 +16,7 @@ In this paper, we propose to leverage data augmentation to defeat reconstruction
 
 
 ## Citation 
-If you use this code or survey in your research, please cite this project.
+If you use this code in your research, please cite it.
 ```
 @inproceedings{gao2021privacy,
   title={Privacy-preserving collaborative learning with automatic transformation search},
